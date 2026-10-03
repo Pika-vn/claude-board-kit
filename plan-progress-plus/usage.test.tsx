@@ -132,7 +132,8 @@ test('every row ends in the same fixed-width column, so all bars line up at one 
       for (const key of ['label-ticks', 'label:context', 'label:stats']) {
         const box = (await ui.find({ key })) as { props?: { flexGrow?: number; minWidth?: number } } | undefined
         expect(box?.props?.flexGrow).toBe(1)
-        expect(box?.props?.minWidth).toBe(0)
+        // a floor under the title column: a desktop row is only as wide as its content, so 0 collapsed it
+        expect(box?.props?.minWidth).toBeGreaterThan(80)
       }
     }
     // a task bar's end column holds its close button only, no %

@@ -1,6 +1,6 @@
 {
   "name": "plan-progress-plus",
-  "version": "0.4.0-board.6",
+  "version": "0.4.0-board.7",
   "description": "Fork of plan-progress with the usage board merged in. Live plan progress bars above the Claude Code prompt: stages, steps, a pixel fill and soft sounds, plus a git row, context and limit bars with burn rate, and chips for tokens, spend, time, cache, speed, last tool and errors",
   "author": { "name": "Kirill Serditov", "url": "https://github.com/zycck" },
   "license": "MIT",

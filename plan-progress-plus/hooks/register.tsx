@@ -1368,10 +1368,14 @@ export const register: Register = on => {
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
     // the column after each bar: the same width on every row, so all bars line up and have one length
-    // the title column takes whatever the bar leaves and truncates; the bar never shrinks, so every
-    // bar ends at the same right edge even when the band is narrower than estimated
+    // the title column is at least as wide as the titles measured above and takes any slack; the bar
+    // never shrinks. A desktop row is only as wide as its content, so without that floor a growing
+    // column had nothing to grow into and collapsed to zero, wrapping its text a letter per line.
+    const labelMin = isTerminal
+      ? Math.max(8, Math.min(Math.round(titleWidth / 6.4), (e.props.bodyColumns || 100) - 36 - TRAIL - 6))
+      : titleWidth
     const label = (key: string, children: unknown) => (
-      <Box key={key} flexGrow={1} flexShrink={1} minWidth={0} flexDirection="column">
+      <Box key={key} flexGrow={1} flexShrink={0} minWidth={labelMin} flexDirection="column">
         {children}
       </Box>
     )
@@ -1393,7 +1397,7 @@ export const register: Register = on => {
 
       return [
         ...line,
-        <Box key={`meter:${m.key}`} flexDirection="row" alignItems="center" gap={1}>
+        <Box key={`meter:${m.key}`} width="100%" flexDirection="row" alignItems="center" gap={1}>
           <Text color={m.color}>{'●'}</Text>
           {label(`label:${m.key}`, [
             <Text key="t" wrap="truncate">
@@ -1434,7 +1438,7 @@ export const register: Register = on => {
       cs.length > 0
         ? [
             ...(list.length > 0 && ms.length === 0 && Svg ? [<Svg key="div:stats" source={divider} alt="" width={total} height={1} />] : []),
-            <Box key="meter:stats" flexDirection="row" alignItems="center" gap={1}>
+            <Box key="meter:stats" width="100%" flexDirection="row" alignItems="center" gap={1}>
               <Text dimColor>{'●'}</Text>
               {label(
                 'label:stats',
@@ -1479,7 +1483,7 @@ export const register: Register = on => {
     // the repository the session works in: name, branch, and the lines changed since the last commit
     const gitRow = repo
       ? [
-          <Box key="git" flexDirection="row" alignItems="center" gap={2}>
+          <Box key="git" width="100%" flexDirection="row" alignItems="center" gap={2}>
             <Text dimColor>{repo.repo}</Text>
             <Text dimColor>{repo.branch}</Text>
             <Box flexGrow={1} />
@@ -1495,7 +1499,7 @@ export const register: Register = on => {
       : []
 
     return (
-      <Box flexDirection="column" gap={1}>
+      <Box width="100%" flexDirection="column" gap={1}>
         {gitRow}
         {list.flatMap((p, i) => {
           const v = visibleAgents(p, now)
@@ -1517,7 +1521,7 @@ export const register: Register = on => {
 
           return [
             ...line,
-            <Box key={`bar-${p.id}`} flexDirection="row" alignItems={v ? 'flex-start' : 'center'} gap={1}>
+            <Box key={`bar-${p.id}`} width="100%" flexDirection="row" alignItems={v ? 'flex-start' : 'center'} gap={1}>
               <Text color={color}>{STATE_GLYPH[p.state]}</Text>
               {label(
                 `label-${p.id}`,
