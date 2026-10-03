@@ -47,14 +47,12 @@ test('a task bar shows its step, and a bar each for the context window and the l
     const context = (await ui.find({ key: 'meter:context' }))?.text ?? ''
     expect(context).toContain('Context window')
     expect(context).toContain('124k of 200k left')
-    expect(context).toContain('38%')
+    // no "% used" column: the bar itself says what is left
     const hour = (await ui.find({ key: 'meter:limit-five_hour' }))?.text ?? ''
     expect(hour).toContain('5-hour limit')
     expect(hour).toContain('resets in 2h 14m')
-    expect(hour).toContain('29%')
     const week = (await ui.find({ key: 'meter:limit-seven_day' }))?.text ?? ''
     expect(week).toContain('Weekly limit')
-    expect(week).toContain('92%')
     expect(context).not.toContain('spent')
     if (surface === 'desktop') {
       const svg = await ui.find({ type: 'Svg', alt: /Context window: 38% used/ })
@@ -64,6 +62,9 @@ test('a task bar shows its step, and a bar each for the context window and the l
       expect(await ui.find({ type: 'Svg' })).toBeUndefined()
       // the text bar fills with what is left and says so
       expect(context).toContain('62% left')
+      expect(hour).toContain('71% left')
+      expect(week).toContain('8% left')
+      expect(context).not.toContain('38%')
       // the knob's place holds the count alone
       expect(await ui.find({ type: 'Text', text: /^ 3\/4$/ })).toBeDefined()
     }
@@ -98,6 +99,24 @@ test('a meter fills with what is left, its knob says "% left", and its colour fo
   expect(context).toContain('url(#sh)')
   expect(context).toContain('filter="url(#glow)"')
   await ui.unmount()
+})
+
+test('every row ends in the same fixed-width column, so all bars line up at one length', async ($, on) => {
+  const now = mock.clock(on, { now: START }).now()
+  on('session.usage', async () => usageAt(now))
+  on('turn.complete', async () => ({ text: 'ok', usage: { model: 'm', input_tokens: 10, cache_creation_input_tokens: 0, output_tokens: 10, cache_read_input_tokens: 0 } }))
+  await $.tool.call(PLAN)
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface, ...BAND })
+    for (const key of ['trail-ticks', 'trail:context', 'trail:limit-five_hour', 'trail:limit-seven_day', 'trail:stats']) {
+      const box = (await ui.find({ key })) as { props?: { width?: number } } | undefined
+      expect(box?.props?.width).toBe(7)
+    }
+    // the meters carry no number after the bar
+    expect((await ui.find({ key: 'trail:context' }) as { text?: string } | undefined)?.text ?? '').toBe('')
+    await ui.unmount()
+  }
 })
 
 test('the meters show with no task open and have no close button: they stay up', async ($, on) => {
@@ -210,8 +229,11 @@ test('a limit window past its reset is drawn empty, not at its old fill', async 
   expect((await ui.find({ key: 'meter:context' }))?.text ?? '').toContain('waiting for first reply')
   const hour = (await ui.find({ key: 'meter:limit-five_hour' }))?.text ?? ''
   expect(hour).toContain('5-hour limit › reset')
-  expect(hour).toContain('0%')
-  expect(hour).not.toContain('92%')
+  // a fresh window is all left: the bar is full, not at its old 8%
+  const row = (await ui.find({ key: 'meter:limit-five_hour' })) as { children?: { type?: string; props?: { source?: string } }[] } | undefined
+  const svg = String(row?.children?.find(c => c?.type === 'Svg')?.props?.source ?? '')
+  expect(svg).toContain('100% left')
+  expect(svg).not.toContain('8% left')
   await ui.unmount()
 })
 

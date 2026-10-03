@@ -1363,6 +1363,13 @@ export const register: Register = on => {
     // a hairline between task bars, so each bar and its agent strips read as one group
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
+    // the column after each bar: the same width on every row, so all bars line up and have one length
+    const TRAIL = 7
+    const trail = (key: string, children?: unknown) => (
+      <Box key={key} width={TRAIL} flexShrink={0} flexDirection="row" justifyContent="flex-end" alignItems="center" gap={1}>
+        {children ?? null}
+      </Box>
+    )
     const meterRows = ms.flatMap((m, i) => {
       const line = i === 0 && list.length > 0 && Svg ? [<Svg key="div:meters" source={divider} alt="" width={total} height={1} />] : []
       // the text bar fills with what is left, as the desktop bar does
@@ -1385,6 +1392,11 @@ export const register: Register = on => {
                 <Text wrap="truncate" dimColor>{`${m.pace.icon} ${m.pace.text}`}</Text>
               )
             ) : null}
+            {m.key === 'context' && m.used >= 85 ? (
+              <Box flexDirection="row">
+                <Button key="compact" label="Compact" variant="primary" onPress={() => $.session.compact()} />
+              </Box>
+            ) : null}
           </Box>
           <Box flexGrow={1} />
           {Svg ? (
@@ -1396,12 +1408,7 @@ export const register: Register = on => {
               <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
             </Text>
           )}
-          <Text dimColor>{`${String(m.used).padStart(3, FIGURE_SPACE)}%`}</Text>
-          {m.key === 'context' && m.used >= 85 ? (
-            <Button key="compact" label="Compact" variant="primary" onPress={() => $.session.compact()} />
-          ) : (
-            <Text>{FIGURE_SPACE}</Text>
-          )}
+          {trail(`trail:${m.key}`)}
         </Box>,
       ]
     })
@@ -1413,6 +1420,23 @@ export const register: Register = on => {
             <Box key="meter:stats" flexDirection="row" alignItems="center" gap={1}>
               <Text dimColor>{'●'}</Text>
               <Text wrap="truncate">{'This chat'}</Text>
+              {act.errors.length > 0
+                ? (b => [
+                    <Text key="errors-icon" color={b.isWarnOnly ? STATE_COLOR.needs_input : STATE_COLOR.error}>
+                      {'⚠'}
+                    </Text>,
+                    <Button
+                      key="errors"
+                      plain
+                      label={b.label}
+                      onPress={async () => {
+                        const errs = (await read($, activity)).errors
+                        const last = errs[errs.length - 1]
+                        $.ui.toast(last ? `${last.tool}: ${last.message}${errs.length > 1 ? `  (+${errs.length - 1} more: /progress-errors)` : ''}` : 'No tool errors this turn.')
+                      }}
+                    />,
+                  ])(errorButton(act.errors))
+                : null}
               <Box flexGrow={1} />
               {Svg ? (
                 <Svg source={chipsSvg(cs, trackW)} alt={cs.map(c => c.alt).join(', ')} width={trackW} height={TRACK_H} />
@@ -1423,25 +1447,7 @@ export const register: Register = on => {
                   ))}
                 </Text>
               )}
-              {act.errors.length > 0 ? (
-                (b => [
-                  <Text key="errors-icon" color={b.isWarnOnly ? STATE_COLOR.needs_input : STATE_COLOR.error}>
-                    {'⚠'}
-                  </Text>,
-                  <Button
-                    key="errors"
-                    plain
-                    label={b.label}
-                    onPress={async () => {
-                      const errs = (await read($, activity)).errors
-                      const last = errs[errs.length - 1]
-                      $.ui.toast(last ? `${last.tool}: ${last.message}${errs.length > 1 ? `  (+${errs.length - 1} more: /progress-errors)` : ''}` : 'No tool errors this turn.')
-                    }}
-                  />,
-                ])(errorButton(act.errors))
-              ) : (
-                <Text dimColor>{FIGURE_SPACE.repeat(4)}</Text>
-              )}
+              {trail('trail:stats')}
             </Box>,
           ]
         : []
@@ -1503,8 +1509,10 @@ export const register: Register = on => {
                   <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
                 </Text>
               )}
-              <Text dimColor>{`${String(pct).padStart(3, FIGURE_SPACE)}%`}</Text>
-              <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />
+              {trail(`trail-${p.id}`, [
+                <Text key="pct" dimColor>{`${String(pct).padStart(3, FIGURE_SPACE)}%`}</Text>,
+                <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />,
+              ])}
             </Box>,
           ]
         })}
