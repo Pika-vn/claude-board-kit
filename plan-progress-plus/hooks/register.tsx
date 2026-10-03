@@ -275,12 +275,24 @@ function trackSvg(p: Plan, W: number): string {
     knob += `<text x="${left + iconW}" y="${H / 2 + 4.2}" class="kt">${count}</text>`
   }
 
-  return barSvg({ W, fx, from, acc, light, done, marks, knob, kw })
+  return barSvg({ W, fx, from, acc, light, done, marks, knob, kw, glow: color })
 }
 
 // the pill every bar is drawn in: a pixel fill up to fx, its marks, and the knob riding the fill's head
-function barSvg(b: { W: number; fx: number; from: number; acc: number[]; light: number[]; done: boolean; marks: string; knob: string; kw: number }): string {
-  const { W, fx, from, acc, light, done, marks, knob, kw } = b
+function barSvg(b: {
+  W: number
+  fx: number
+  from: number
+  acc: number[]
+  light: number[]
+  done: boolean
+  marks: string
+  knob: string
+  kw: number
+  glow?: string // the knob's colour, for its halo
+  isCritical?: boolean // under a fifth left: the halo pulses fast
+}): string {
+  const { W, fx, from, acc, light, done, marks, knob, kw, glow, isCritical } = b
   const H = TRACK_H
   const grey = [132, 130, 138]
   const ease = 'calcMode="spline" keyTimes="0;1" keySplines=".2 .8 .2 1"'
@@ -318,23 +330,46 @@ rect[class]{width:2px;height:2px}
 @keyframes tw{0%,100%{opacity:1}50%{opacity:${done ? 0.8 : 0.45}}}
 .kt{font:500 12px 'Anthropic Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;fill:#fff}
 .kc{font-weight:400;fill-opacity:.75}
+.kd{fill:#0b0f14;font-weight:700}
 @media (prefers-reduced-motion:reduce){.t0,.t1,.t2,.t3{animation:none}}
 </style>`
   const glideFill = glide ? `<animate attributeName="width" from="${from.toFixed(1)}" to="${fx.toFixed(1)}" dur=".45s" ${ease} fill="freeze"/>` : ''
   const glideKnob = glide ? `<animateTransform attributeName="transform" type="translate" from="${kFrom.toFixed(1)} 0" to="${kx.toFixed(1)} 0" dur=".45s" ${ease} fill="freeze"/>` : ''
 
+  // motion, all looping in place so a redraw never shows a seam: eased curves, a rest between sweeps
+  const swing = 'calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1"'
+  const hot = rgb(mix(acc, [255, 255, 255], 0.55))
+  // a light sweeping the fill: out of view during its rest, so the loop restarts unseen
+  const sweep =
+    fx > 8 && !done
+      ? `<rect y="0" width="60" height="${H}" fill="url(#sh)" clip-path="url(#fill)"><animate attributeName="x" values="-90;${(fx + 30).toFixed(1)};${(fx + 30).toFixed(1)}" keyTimes="0;.62;1" calcMode="spline" keySplines=".4 0 .2 1;0 0 1 1" dur="5.2s" repeatCount="indefinite"/></rect>`
+      : ''
+  // the head of the fill breathes
+  const edge =
+    fx > 6 && fx < W - 2
+      ? `<rect x="${(fx - 3).toFixed(1)}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values=".2;.85;.2" ${swing} dur="2.2s" repeatCount="indefinite"/></rect>`
+      : ''
+  // a halo and a glass highlight on the knob, faster and stronger when nearly out
+  const halo = glow
+    ? `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${glow}" filter="url(#glow)"><animate attributeName="opacity" values="${isCritical ? '.5;1;.5' : '.25;.65;.25'}" ${swing} dur="${isCritical ? '0.9s' : '2.6s'}" repeatCount="indefinite"/></rect>`
+    : ''
+  const gloss = `<rect x="${-kw / 2 + 4}" y="1.5" width="${Math.max(0, kw - 8)}" height="${H / 2 - 2}" rx="${H / 4}" fill="#fff" opacity=".16"/>`
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${style}
 <defs><clipPath id="pill"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath><clipPath id="fill"><rect width="${fx.toFixed(1)}" height="${H}">${glideFill}</rect></clipPath>
-<linearGradient id="base" x1="0" x2="${fx.toFixed(1)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${rgb(acc)}" stop-opacity="${done ? 0.3 : 0.05}"/><stop offset="1" stop-color="${rgb(acc)}" stop-opacity=".33"/></linearGradient></defs>
-<g clip-path="url(#pill)"><rect width="${W}" height="${H}" fill="#808080" fill-opacity=".16"/>
-<g clip-path="url(#fill)"><rect width="${fx.toFixed(1)}" height="${H}" fill="url(#base)"/>${px}</g>${marks}</g>
-<g transform="translate(${kx.toFixed(1)} 0)">${glideKnob}${knob}</g></svg>`
+<linearGradient id="base" x1="0" x2="${fx.toFixed(1)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${rgb(acc)}" stop-opacity="${done ? 0.3 : 0.05}"/><stop offset="1" stop-color="${rgb(acc)}" stop-opacity=".33"/></linearGradient>
+<linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity=".06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="3s" repeatCount="indefinite"/></pattern>
+<filter id="glow" x="-60%" y="-80%" width="220%" height="260%"><feGaussianBlur stdDeviation="3.5"/></filter></defs>
+<g clip-path="url(#pill)"><rect width="${W}" height="${H}" fill="#808080" fill-opacity=".16"/><rect width="${W}" height="${H}" fill="url(#dt)"/>
+<g clip-path="url(#fill)"><rect width="${fx.toFixed(1)}" height="${H}" fill="url(#base)"/>${px}</g>${marks}${sweep}${edge}</g>
+<g transform="translate(${kx.toFixed(1)} 0)">${glideKnob}${halo}${knob}${gloss}</g></svg>`
 }
 
-// a usage meter in the same pill: filled to the share used, quarter ticks, the knob saying what is left
+// a usage meter in the same pill: filled to the share LEFT, quarter ticks, the knob saying what is left
 function meterSvg(m: Meter, W: number): string {
   const H = TRACK_H
-  const frac = Math.min(100, m.used) / 100
+  const frac = Math.max(0, 100 - Math.min(100, m.used)) / 100
   const fx = frac * W
   const from = glideFrom(`meter:${m.key}`, frac, W)
   const acc = hex(m.color)
@@ -355,12 +390,13 @@ function meterSvg(m: Meter, W: number): string {
     // too narrow for "62% left": a plain dot, the row's % column carries the figure
     knob = `<circle cx="0" cy="${H / 2}" r="${H / 2}" fill="${m.color}"/>`
   } else {
-    const num = `${left}%`
+    const num = `${left}% left`
     kw = Math.round(20 + textWidth(num))
-    knob = `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${m.color}"/><text x="${-kw / 2 + 10}" y="${H / 2 + 4.2}" class="kt">${num}</text>`
+    // dark ink: the knob runs green to yellow to red, where white text would wash out
+    knob = `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${m.color}"/><text x="${-kw / 2 + 10}" y="${H / 2 + 4.2}" class="kt kd">${num}</text>`
   }
 
-  return barSvg({ W, fx, from, acc, light, done: false, marks, knob, kw })
+  return barSvg({ W, fx, from, acc, light, done: false, marks, knob, kw, glow: m.color, isCritical: left < 20 })
 }
 
 // ---------- this chat's tokens and spend, as chips ----------
@@ -734,8 +770,14 @@ const LIMIT_NAME: Record<string, string> = { five_hour: '5-hour limit', seven_da
 const limitName = (kind: string) => LIMIT_NAME[kind] ?? (kind.charAt(0).toUpperCase() + kind.slice(1)).replace(/_/g, ' ')
 const kTokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`)
 const METER_COLOR = { context: '#3E95D8', limit: '#2A9D8F' }
-// amber from three quarters used, red from nine tenths
-const meterColor = (used: number, base: string) => (used >= 90 ? STATE_COLOR.error : used >= 75 ? STATE_COLOR.needs_input : base)
+// the colour follows what is left: plenty green, half yellow, exhausted red, blended in between
+const LEVEL = { green: [61, 220, 132], yellow: [255, 210, 63], red: [255, 77, 109] }
+const meterColor = (used: number, _base?: string) => {
+  const t = Math.max(0, Math.min(100, 100 - used)) / 100
+  const c = t >= 0.5 ? mix(LEVEL.yellow, LEVEL.green, (t - 0.5) * 2) : mix(LEVEL.red, LEVEL.yellow, t * 2)
+
+  return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('')
+}
 
 function resetsIn(iso: string | null, now: number) {
   const at = iso ? Date.parse(iso) : NaN
@@ -1293,7 +1335,7 @@ export const register: Register = on => {
     const ms = isShowingUsage ? (u ? meters(u, now) : []) : []
     // the context row shows from the first moment of a session, waiting for its first reading
     if (isShowingUsage && !ms.some(m => m.key === 'context')) {
-      ms.unshift({ key: 'context', title: 'Context window', detail: 'waiting for first reply', used: 0, color: METER_COLOR.context, alt: 'Context window: waiting for the first reply' })
+      ms.unshift({ key: 'context', title: 'Context window', detail: 'waiting for first reply', used: 0, color: meterColor(0), alt: 'Context window: waiting for the first reply' })
     }
     const cs = isShowingUsage ? chips(await read($, tokens), u, await read($, timing), now, act) : []
     if (e.props.hasSurvey || !(await read($, isOpen))) return next(e)
@@ -1323,7 +1365,9 @@ export const register: Register = on => {
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
     const meterRows = ms.flatMap((m, i) => {
       const line = i === 0 && list.length > 0 && Svg ? [<Svg key="div:meters" source={divider} alt="" width={total} height={1} />] : []
-      const bar = `${'━'.repeat(Math.round(Math.min(100, m.used) / 4))}${'─'.repeat(25 - Math.round(Math.min(100, m.used) / 4))}`
+      // the text bar fills with what is left, as the desktop bar does
+      const leftBlocks = Math.round(Math.max(0, 100 - Math.min(100, m.used)) / 4)
+      const bar = `${'━'.repeat(leftBlocks)}${'─'.repeat(25 - leftBlocks)}`
 
       return [
         ...line,
@@ -1349,7 +1393,7 @@ export const register: Register = on => {
             <Text>
               <Text color={m.color}>{bar.replace(/─/g, '')}</Text>
               <Text dimColor>{bar.replace(/━/g, '')}</Text>
-              <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}%`}</Text>
+              <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
             </Text>
           )}
           <Text dimColor>{`${String(m.used).padStart(3, FIGURE_SPACE)}%`}</Text>

@@ -3,8 +3,9 @@
 Progress bars above the Claude Code prompt, plus how much of your usage is left.
 
 - **Task bars:** when Claude starts a task with several steps, a bar shows its progress, the current step ("› 5/8 Backfill") and the % done.
-- **Context window bar:** how full this chat's context is.
-- **5-hour and weekly limit bars:** % used and when each resets. They turn amber at 75% used and red at 90%.
+- **Context window bar:** how much of this chat's context is left.
+- **5-hour and weekly limit bars:** how much is left and when each resets. In the board edition these bars fill with what is **left**, the knob reads "56% left", the % column on the right is what is used, and the colour runs green (plenty) → yellow (half) → red (nearly out).
+- **Motion (board edition):** a light sweeps each fill with a rest between passes, the head of the fill breathes, the knob has a soft halo and a glass highlight (pulsing fast under 20% left), and the empty track drifts.
 - **"This chat" row:** tokens in ↑, tokens out ↓, tokens read from cache ≋, cost at API prices ($), total compute time ◷, and time on the current task ▸.
 
 Added in the board edition (`0.4.0-board`):

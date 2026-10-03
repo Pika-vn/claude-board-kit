@@ -62,13 +62,42 @@ test('a task bar shows its step, and a bar each for the context window and the l
     } else {
       // the terminal draws text bars, never an Svg
       expect(await ui.find({ type: 'Svg' })).toBeUndefined()
-      expect(context).toContain('62%')
-      expect(context).not.toContain('% left')
+      // the text bar fills with what is left and says so
+      expect(context).toContain('62% left')
       // the knob's place holds the count alone
       expect(await ui.find({ type: 'Text', text: /^ 3\/4$/ })).toBeDefined()
     }
     await ui.unmount()
   }
+})
+
+test('a meter fills with what is left, its knob says "% left", and its colour follows the level', async ($, on) => {
+  const now = mock.clock(on, { now: START }).now()
+  on('session.usage', async () => usageAt(now))
+  await $.tool.call(PLAN)
+  const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface: 'desktop', ...BAND })
+  type Node = { type?: string; props?: { source?: string }; children?: unknown[] }
+  // the Svg inside one meter row
+  const svgOf = async (key: string) => {
+    const row = (await ui.find({ key })) as Node | undefined
+    const svg = (row?.children ?? []).find(c => (c as Node)?.type === 'Svg') as Node | undefined
+    return String(svg?.props?.source ?? '')
+  }
+  const context = await svgOf('meter:context')
+  const width = Number(/<clipPath id="fill"><rect width="([\d.]+)"/.exec(context)?.[1])
+  const track = Number(/<svg[^>]* width="(\d+)"/.exec(context)?.[1])
+  // 62% left of the track, not the 38% used
+  expect(Math.round((width / track) * 100)).toBe(62)
+  expect(context).toContain('62% left')
+  // 92% of the week used: 8% left reads red and pulses fast
+  const week = await svgOf('meter:limit-seven_day')
+  expect(week).toContain('8% left')
+  expect(week).toContain('fill="#ff')
+  expect(week).toContain('dur="0.9s"')
+  // the motion: a sweep and a breathing head
+  expect(context).toContain('url(#sh)')
+  expect(context).toContain('filter="url(#glow)"')
+  await ui.unmount()
 })
 
 test('the meters show with no task open and have no close button: they stay up', async ($, on) => {
