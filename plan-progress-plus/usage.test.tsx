@@ -109,10 +109,23 @@ test('every row ends in the same fixed-width column, so all bars line up at one 
   await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface, ...BAND })
+    // cells on the terminal, CSS px on the desktop: room for a task bar's close button and nothing else
     for (const key of ['trail-ticks', 'trail:context', 'trail:limit-five_hour', 'trail:limit-seven_day', 'trail:stats']) {
       const box = (await ui.find({ key })) as { props?: { width?: number } } | undefined
-      expect(box?.props?.width).toBe(7)
+      expect(box?.props?.width).toBe(surface === 'terminal' ? 2 : 20)
     }
+    if (surface === 'desktop') {
+      // every bar is drawn at one width, and wide: the band is 160 columns, about 1280 px
+      const widths = new Set<number>()
+      for (const key of ['bar-ticks', 'meter:context', 'meter:limit-five_hour', 'meter:limit-seven_day']) {
+        const row = (await ui.find({ key })) as { children?: { type?: string; props?: { width?: number } }[] } | undefined
+        widths.add(Number(row?.children?.find(c => c?.type === 'Svg')?.props?.width))
+      }
+      expect(widths.size).toBe(1)
+      expect([...widths][0]).toBeGreaterThan(900)
+    }
+    // a task bar's end column holds its close button only, no %
+    expect((await ui.find({ key: 'trail-ticks' }) as { text?: string } | undefined)?.text ?? '').not.toContain('%')
     // the meters carry no number after the bar
     expect((await ui.find({ key: 'trail:context' }) as { text?: string } | undefined)?.text ?? '').toBe('')
     await ui.unmount()
@@ -170,7 +183,8 @@ test('Claude\'s own task list shows as a bar, "Phase: step" titles grouped into 
   const bar = (await ui.find({ key: 'bar-tasks:auto' }))?.text ?? ''
   expect(bar).toContain('Tasks')
   expect(bar).toContain('› 2/3 Run tests')
-  expect(bar).toContain('33%')
+  // no % number after the bar: only its close button
+  expect(bar).not.toContain('33%')
   await ui.unmount()
 })
 

@@ -341,7 +341,7 @@ rect[class]{width:2px;height:2px}
   const hot = rgb(mix(acc, [255, 255, 255], 0.55))
   // a light sweeping the fill: out of view during its rest, so the loop restarts unseen
   const sweep =
-    fx > 8 && !done
+    fx > 8
       ? `<rect y="0" width="60" height="${H}" fill="url(#sh)" clip-path="url(#fill)"><animate attributeName="x" values="-90;${(fx + 30).toFixed(1)};${(fx + 30).toFixed(1)}" keyTimes="0;.62;1" calcMode="spline" keySplines=".4 0 .2 1;0 0 1 1" dur="5.2s" repeatCount="indefinite"/></rect>`
       : ''
   // the head of the fill breathes
@@ -1344,9 +1344,13 @@ export const register: Register = on => {
     // the terminal's table lists Svg too but draws nothing for it: it gets the text bars
     const Svg = e.surface !== 'terminal' && 'Svg' in t ? t.Svg : null
     const total = Math.max(320, (e.props.bodyColumns || 100) * 8)
-    // every bar has the same width and is pinned to the right edge (fixed-width percent, close button),
-    // so rows line up whatever their titles; the slack goes into the gap after the title.
-    // Desktop reports ~8 CSS px per column; glyph, gaps, percent and the close button take ~126 px.
+    // every bar has the same width and is pinned to the right edge (a fixed-width end column holding only
+    // a task bar's close button), so rows line up whatever their titles; the slack goes after the title.
+    // Desktop reports ~8 CSS px per column and lays Box widths out in CSS px; the terminal in cells.
+    const isTerminal = e.surface === 'terminal'
+    const TRAIL = isTerminal ? 2 : 20
+    // glyph, the gaps between the row's parts and the end column: the rest of the row is title and bar
+    const RESERVED = 60 + TRAIL
     const measure = (xs: string[]) => Math.min(Math.round(total * 0.3), Math.max(...xs.map(s => Math.round(textWidth(s, 6.4)))))
     // plain titles set the column; step labels and meter details only take room the track can spare
     // above NARROW, and they truncate past it. They are sized by their widest form, not the text of
@@ -1357,14 +1361,13 @@ export const register: Register = on => {
       ...list.map(p => (p.state === 'done' ? p.title : `${p.title} › 00/00 ${longest(p)}`)),
       ...ms.map(m => `${m.title} › ${m.key === 'context' ? 'waiting for first reply' : 'resets in 00h 00m'}`),
     ])
-    const titleWidth = Math.max(base, Math.min(full, total - 140 - NARROW))
-    const trackW = Math.max(120, Math.min(1400, total - titleWidth - 140))
+    const titleWidth = Math.max(base, Math.min(full, total - RESERVED - NARROW))
+    const trackW = Math.max(120, Math.min(1600, total - titleWidth - RESERVED))
     await read($, tick)
     // a hairline between task bars, so each bar and its agent strips read as one group
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
     // the column after each bar: the same width on every row, so all bars line up and have one length
-    const TRAIL = 7
     const trail = (key: string, children?: unknown) => (
       <Box key={key} width={TRAIL} flexShrink={0} flexDirection="row" justifyContent="flex-end" alignItems="center" gap={1}>
         {children ?? null}
@@ -1509,10 +1512,7 @@ export const register: Register = on => {
                   <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
                 </Text>
               )}
-              {trail(`trail-${p.id}`, [
-                <Text key="pct" dimColor>{`${String(pct).padStart(3, FIGURE_SPACE)}%`}</Text>,
-                <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />,
-              ])}
+              {trail(`trail-${p.id}`, <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />)}
             </Box>,
           ]
         })}
