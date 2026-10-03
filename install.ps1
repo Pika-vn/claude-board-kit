@@ -1,4 +1,5 @@
-# Installs the Claude Code usage board (band above the prompt) and the status line on this machine.
+# Installs the Claude Code progress board (plan-progress-plus, board edition: bars above the prompt)
+# and the status line on this machine.
 #   powershell -ExecutionPolicy Bypass -File install.ps1            # full install
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -SkipTools # don't install Git / GitHub CLI
 param(
@@ -29,13 +30,15 @@ if (-not $SkipTools) {
 }
 
 # 2. Copy the mod and the status line script
-$modDest = Join-Path $ClaudeDir 'mods\usage-board'
-Step "Copying the usage board to $modDest"
+$modDest = Join-Path $ClaudeDir 'mods\plan-progress-plus'
+Step "Copying the progress board to $modDest"
 New-Item -ItemType Directory -Force $modDest | Out-Null
-foreach ($part in '.claude-plugin\plugin.json', 'hooks\hooks.json', 'hooks\register.tsx', 'types\index.d.ts') {
+foreach ($part in '.claude-plugin\plugin.json', 'hooks\hooks.json', 'hooks\register.tsx', 'types\index.d.ts',
+                  'skills\plan-progress-plus\SKILL.md', 'sounds\decision.wav', 'sounds\error.wav', 'sounds\done.wav',
+                  'LICENSE', 'README.md') {
     $to = Join-Path $modDest $part
     New-Item -ItemType Directory -Force (Split-Path $to) | Out-Null
-    Copy-Item (Join-Path $kit "usage-board\$part") $to -Force
+    Copy-Item (Join-Path $kit "plan-progress-plus\$part") $to -Force
 }
 $statusDest = Join-Path $ClaudeDir 'statusline.ps1'
 Copy-Item (Join-Path $kit 'statusline\statusline.ps1') $statusDest -Force
@@ -53,11 +56,19 @@ if (-not $settings.env) { $settings | Add-Member -NotePropertyName env -NoteProp
 $modPath = $modDest -replace '\\', '/'
 $dirs = @()
 if ($settings.env.CLAUDE_CODE_PLUGIN_DIRS) {
-    $dirs = $settings.env.CLAUDE_CODE_PLUGIN_DIRS -split ';' | Where-Object { $_ -and ($_ -notmatch 'usage-board/?$') }
+    # drop earlier copies: the old usage-board and any other plan-progress-plus folder
+    # @() keeps a single remaining entry a list, so += appends instead of gluing strings together
+    $dirs = @($settings.env.CLAUDE_CODE_PLUGIN_DIRS -split ';' | Where-Object { $_ -and ($_ -notmatch '(usage-board|plan-progress-plus)[\\/]?$') })
 }
 $dirs += $modPath
 $settings.env | Add-Member -NotePropertyName CLAUDE_CODE_PLUGIN_DIRS -NotePropertyValue ($dirs -join ';') -Force
 $settings.env | Add-Member -NotePropertyName CLAUDE_CODE_PLUGIN_DIR_WATCH -NotePropertyValue '1' -Force
+
+# the original plan-progress would draw a second set of bars
+if ($settings.enabledPlugins -and ($settings.enabledPlugins.PSObject.Properties.Name -contains 'plan-progress@zycck-mods')) {
+    $settings.enabledPlugins.'plan-progress@zycck-mods' = $false
+    Step 'Turned off the original plan-progress plugin'
+}
 
 $statusLine = [PSCustomObject]@{
     type    = 'command'

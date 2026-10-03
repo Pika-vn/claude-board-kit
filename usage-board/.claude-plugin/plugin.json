@@ -1,7 +1,0 @@
-{
-  "name": "usage-board",
-  "version": "1.0.3",
-  "description": "Animated progress board above the prompt: git, phases, subagents, context window, 5-hour and weekly limits",
-  "author": { "name": "PikaChu" },
-  "types": "./types/index.d.ts"
-}

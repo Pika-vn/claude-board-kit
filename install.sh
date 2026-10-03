@@ -41,11 +41,12 @@ fi
 works python3 || { echo "error: python3 is required" >&2; exit 1; }
 
 # 2. Copy the mod and the status line script
-MOD="$CLAUDE_DIR/mods/usage-board"
-step "Copying the usage board to $MOD"
-for part in .claude-plugin/plugin.json hooks/hooks.json hooks/register.tsx types/index.d.ts; do
+MOD="$CLAUDE_DIR/mods/plan-progress-plus"
+step "Copying the progress board to $MOD"
+for part in .claude-plugin/plugin.json hooks/hooks.json hooks/register.tsx types/index.d.ts \
+            skills/plan-progress-plus/SKILL.md sounds/decision.wav sounds/error.wav sounds/done.wav LICENSE README.md; do
   mkdir -p "$(dirname "$MOD/$part")"
-  cp "$KIT/usage-board/$part" "$MOD/$part"
+  cp "$KIT/plan-progress-plus/$part" "$MOD/$part"
 done
 cp "$KIT/statusline/statusline.py" "$CLAUDE_DIR/statusline.py"
 chmod +x "$CLAUDE_DIR/statusline.py"
@@ -59,9 +60,14 @@ import json, os, sys
 path, mod, status = sys.argv[1:4]
 s = json.load(open(path)) if os.path.exists(path) else {}
 env = s.setdefault("env", {})
-dirs = [p for p in env.get("CLAUDE_CODE_PLUGIN_DIRS", "").split(os.pathsep) if p and not p.rstrip("/").endswith("usage-board")]
+# drop earlier copies: the old usage-board and any other plan-progress-plus folder
+dirs = [p for p in env.get("CLAUDE_CODE_PLUGIN_DIRS", "").split(os.pathsep)
+        if p and not p.rstrip("/").endswith(("usage-board", "plan-progress-plus"))]
 env["CLAUDE_CODE_PLUGIN_DIRS"] = os.pathsep.join(dirs + [mod])
 env["CLAUDE_CODE_PLUGIN_DIR_WATCH"] = "1"
+# the original plan-progress would draw a second set of bars
+if "plan-progress@zycck-mods" in s.get("enabledPlugins", {}):
+    s["enabledPlugins"]["plan-progress@zycck-mods"] = False
 s["statusLine"] = {"type": "command", "command": f'python3 "{status}"', "padding": 0}
 json.dump(s, open(path, "w"), indent=2)
 PY
