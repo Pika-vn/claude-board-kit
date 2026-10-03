@@ -11,6 +11,12 @@ Bảng tiến độ luôn hiện phía trên ô nhập lệnh của Claude Code 
 
 Kèm thêm một **status line** (dòng trạng thái của `claude` trong terminal).
 
+## User guide
+
+![Progress Board](docs/images/progress-board.png)
+
+See the **[User Guide](docs/USER-GUIDE.md)** ([PDF](docs/USER-GUIDE.pdf)) for what each row, chip and command means.
+
 ## Cài trên máy mới
 
 1. Lấy bộ cài về máy mới, chọn một trong hai cách:
