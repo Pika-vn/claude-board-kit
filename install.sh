@@ -7,19 +7,38 @@ KIT="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 step() { printf '\033[36m==> %s\033[0m\n' "$1"; }
 
-# 1. Tools: git (repo row), gh (clone this kit from GitHub), python3 (status line + settings merge)
+# A tool counts as installed only if it actually runs: on a Mac without the Command Line Tools,
+# /usr/bin/git and /usr/bin/python3 are stubs that just pop up an install dialog.
+works() {
+  case "$1" in
+    python3) python3 -c 'import sys' >/dev/null 2>&1 ;;
+    *) "$1" --version >/dev/null 2>&1 ;;
+  esac
+}
+
+# 1. Tools: git (repo row), python3 (status line + settings merge), gh (clone this kit from GitHub)
 if [[ "${1:-}" != "--skip-tools" ]]; then
-  for tool in git gh python3; do
-    if command -v "$tool" >/dev/null 2>&1; then
+  if [[ "$(uname)" == "Darwin" ]] && ! xcode-select -p >/dev/null 2>&1; then
+    step "Installing the Xcode Command Line Tools (gives git and python3)"
+    xcode-select --install || true
+    echo "Finish the installer window that opened, then run this script again." >&2
+    exit 1
+  fi
+  for tool in git python3 gh; do
+    if works "$tool"; then
       step "$tool already installed"
     elif command -v brew >/dev/null 2>&1; then
       step "Installing $tool with Homebrew"
-      brew install "$( [[ $tool == python3 ]] && echo python || echo "$tool" )"
+      if [[ "$tool" == "python3" ]]; then brew install python; else brew install "$tool"; fi
+    elif [[ "$tool" == "gh" ]]; then
+      echo "note: gh not found; it is only needed to clone this kit from GitHub (https://brew.sh then: brew install gh)" >&2
     else
-      echo "warning: install $tool by hand (no Homebrew found)" >&2
+      echo "error: $tool is missing; install it, then run this script again" >&2
+      exit 1
     fi
   done
 fi
+works python3 || { echo "error: python3 is required" >&2; exit 1; }
 
 # 2. Copy the mod and the status line script
 MOD="$CLAUDE_DIR/mods/usage-board"
@@ -43,7 +62,7 @@ env = s.setdefault("env", {})
 dirs = [p for p in env.get("CLAUDE_CODE_PLUGIN_DIRS", "").split(os.pathsep) if p and not p.rstrip("/").endswith("usage-board")]
 env["CLAUDE_CODE_PLUGIN_DIRS"] = os.pathsep.join(dirs + [mod])
 env["CLAUDE_CODE_PLUGIN_DIR_WATCH"] = "1"
-s["statusLine"] = {"type": "command", "command": f"python3 {status}", "padding": 0}
+s["statusLine"] = {"type": "command", "command": f'python3 "{status}"', "padding": 0}
 json.dump(s, open(path, "w"), indent=2)
 PY
 

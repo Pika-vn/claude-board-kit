@@ -181,12 +181,7 @@ function cellsFor(spec: Spec, width: number, frame: number, isWorking: boolean) 
 // Last fill drawn per row, so a changed value slides to its new width instead of jumping
 const lastFill = new Map<string, number>()
 
-// SMIL `begin` that resumes a looping animation at its wall-clock phase, so a redraw never restarts it
-function phase(now: number, ms: number) {
-  return `-${((now % ms) / 1000).toFixed(2)}s`
-}
-
-function svgFor(spec: Spec, isWorking: boolean, now: number) {
+function svgFor(spec: Spec, isWorking: boolean) {
   const W = 420
   const H = 22
   const col = hex(spec.color)
@@ -218,12 +213,12 @@ function svgFor(spec: Spec, isWorking: boolean, now: number) {
 
   // Light sweep: always on, brighter and faster while Claude is working
   const sweepMs = isWorking ? 1600 : 3800
-  const sweep = `<rect y="0" width="${isWorking ? 80 : 60}" height="${H}" fill="url(#sh)" opacity="${isWorking ? 1 : 0.55}" clip-path="url(#fc)"><animate attributeName="x" from="-80" to="${fw + 20}" dur="${sweepMs / 1000}s" begin="${phase(now, sweepMs)}" repeatCount="indefinite"/></rect>`
+  const sweep = `<rect y="0" width="${isWorking ? 80 : 60}" height="${H}" fill="url(#sh)" opacity="${isWorking ? 1 : 0.55}" clip-path="url(#fc)"><animate attributeName="x" from="-80" to="${fw + 20}" dur="${sweepMs / 1000}s" repeatCount="indefinite"/></rect>`
 
   // Glowing edge at the end of the fill, breathing
   const edge =
     fw > 6
-      ? `<rect x="${fw - 3}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values="0.25;0.9;0.25" dur="1.8s" begin="${phase(now, 1800)}" repeatCount="indefinite"/></rect>`
+      ? `<rect x="${fw - 3}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values="0.25;0.9;0.25" dur="1.8s" repeatCount="indefinite"/></rect>`
       : ''
 
   const pulseMs = spec.isCritical ? 900 : 2600
@@ -235,7 +230,7 @@ function svgFor(spec: Spec, isWorking: boolean, now: number) {
 <linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 <pattern id="pa" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(3)}</pattern>
 <pattern id="pb" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(11)}</pattern>
-<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="2.4s" begin="${phase(now, 2400)}" repeatCount="indefinite"/></pattern>
+<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="2.4s" repeatCount="indefinite"/></pattern>
 <clipPath id="tc"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath>
 <clipPath id="fc"><rect width="${fw}" height="${H}">${slide}</rect></clipPath>
 <filter id="glow" x="-60%" y="-80%" width="220%" height="260%"><feGaussianBlur stdDeviation="3.5"/></filter>
@@ -246,14 +241,14 @@ function svgFor(spec: Spec, isWorking: boolean, now: number) {
 ${ticks}
 <g clip-path="url(#fc)">
 <rect width="${W}" height="${H}" fill="url(#g)"/>
-<rect width="${W}" height="${H}" fill="url(#pa)"><animate attributeName="opacity" values="1;0.25;1" dur="2.6s" begin="${phase(now, 2600)}" repeatCount="indefinite"/></rect>
-<rect width="${W}" height="${H}" fill="url(#pb)"><animate attributeName="opacity" values="0.25;1;0.25" dur="2.6s" begin="${phase(now, 2600)}" repeatCount="indefinite"/></rect>
+<rect width="${W}" height="${H}" fill="url(#pa)"><animate attributeName="opacity" values="1;0.25;1" dur="2.6s" repeatCount="indefinite"/></rect>
+<rect width="${W}" height="${H}" fill="url(#pb)"><animate attributeName="opacity" values="0.25;1;0.25" dur="2.6s" repeatCount="indefinite"/></rect>
 </g>
 ${sweep}
 ${edge}
 </g>
 <g>
-<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" filter="url(#glow)"><animate attributeName="opacity" values="${badgeGlow}" dur="${pulseMs / 1000}s" begin="${phase(now, pulseMs)}" repeatCount="indefinite"/></rect>
+<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" filter="url(#glow)"><animate attributeName="opacity" values="${badgeGlow}" dur="${pulseMs / 1000}s" repeatCount="indefinite"/></rect>
 <rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}"/>
 <rect x="${bx + 4}" y="3" width="${bw - 8}" height="${(H - 4) / 2 - 1}" rx="${(H - 4) / 4}" fill="#fff" opacity="0.18"/>
 <text x="${bx + bw / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="11.5" font-weight="700" fill="${hex(C.ink)}">${spec.badge.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>
@@ -265,7 +260,8 @@ ${edge}
 
 const WINDOW_MS: Record<string, number> = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 }
 const CACHE_TTL_MS = 5 * 60_000 // estimate: the default prompt-cache lifetime
-const GIT_FALLBACK = 'C:/Program Files/Git/cmd/git.exe'
+// Where git lives when the app's PATH lacks it: Windows installer, Homebrew (Apple silicon / Intel), Xcode tools
+const GIT_FALLBACKS = ['C:/Program Files/Git/cmd/git.exe', '/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git']
 
 function duration(ms: number) {
   if (!(ms > 0)) return '0s'
@@ -407,21 +403,22 @@ function specsFor(list: Task[], u: Usage | null, crew: AgentRow[], now: number):
 
 // ---------- git ----------
 
-let gitExe = 'git'
+let gitExe: string | null = null // the git that started last time
 let gitPending: (() => void) | null = null
 
+// Tries `git` on PATH first, then the usual install spots; remembers the one that starts
 async function runGit($: any, args: string[]) {
-  try {
-    return await $.process.run([gitExe, ...args], { timeoutMs: 5000 })
-  } catch {
-    if (gitExe === GIT_FALLBACK) return null
-    gitExe = GIT_FALLBACK
+  for (const exe of gitExe ? [gitExe] : ['git', ...GIT_FALLBACKS]) {
     try {
-      return await $.process.run([gitExe, ...args], { timeoutMs: 5000 })
+      const result = await $.process.run([exe, ...args], { timeoutMs: 5000 })
+      gitExe = exe
+      return result
     } catch {
-      return null
+      // not installed there: try the next spot
     }
   }
+  gitExe = null
+  return null
 }
 
 async function refreshGit($: any) {
@@ -652,7 +649,7 @@ export const register: Register = on => {
       isTerminal && Raster ? (
         <Raster key={`bar:${s.key}`} columns={width} rows={1} cells={cellsFor(s, width, frame, working)} />
       ) : Svg ? (
-        <Svg source={svgFor(s, working, now)} alt={`${s.label}: ${s.badge}`} isInteractive />
+        <Svg source={svgFor(s, working)} alt={`${s.label}: ${s.badge}`} width={420} height={22} />
       ) : (
         <Text color={hex(s.color)}>{s.badge}</Text>
       )
