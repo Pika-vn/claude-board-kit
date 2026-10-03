@@ -1,7 +1,7 @@
 {
   "name": "usage-board",
-  "version": "0.1.0",
-  "description": "Progress band above the prompt: tasks done, context window, 5-hour and weekly limits",
+  "version": "1.0.0",
+  "description": "Animated progress board above the prompt: git, phases, subagents, context window, 5-hour and weekly limits",
   "author": { "name": "PikaChu" },
   "types": "./types/index.d.ts"
 }
