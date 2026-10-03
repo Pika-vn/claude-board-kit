@@ -135,22 +135,31 @@ function cellsFor(spec: Spec, width: number, frame: number, isWorking: boolean) 
   }
 
   const fillEnd = Math.round(spec.used * width)
-  const shimmer = isWorking ? (frame % (width + 16)) - 8 : -100
-  const pulse = spec.isCritical ? 0.5 + 0.5 * Math.sin(frame / 3) : 1
+  // Light sweep: always on, faster and brighter while working
+  const shimmer = isWorking ? (frame % (width + 16)) - 8 : (Math.floor(frame / 2) % (width + 40)) - 8
+  const sweepGlow = isWorking ? 0.55 : 0.3
+  const pulse = spec.isCritical ? 0.5 + 0.5 * Math.sin(frame / 2) : 1
+  const breathe = 0.5 + 0.5 * Math.sin(frame / 4)
+  const drift = Math.floor(frame / 3) // dotted track flows to the right
 
   for (let i = 0; i < width; i++) {
     if (i < fillEnd) {
-      const n = noise(i, isWorking ? frame >> 1 : 0)
+      const n = noise(i, frame >> 2)
+      const twinkle = noise(i, (frame >> 1) + 101) > 0.9 ? 0.35 : 0
       const ramp = 0.35 + 0.65 * ((i + 1) / Math.max(1, fillEnd)) ** 1.6
       let fg = mix(C.track, spec.color, ramp * (0.7 + 0.3 * n))
       const glow = Math.max(0, 1 - Math.abs(i - shimmer) / 4)
-      fg = mix(fg, 0xffffff, glow * 0.55)
-      const bg = mix(C.track, spec.color, 0.1 + 0.12 * ramp)
+      fg = mix(fg, 0xffffff, glow * sweepGlow + twinkle)
+      let bg = mix(C.track, spec.color, 0.1 + 0.12 * ramp)
+      if (i === fillEnd - 1) {
+        fg = mix(fg, 0xffffff, 0.3 + 0.4 * breathe)
+        bg = mix(bg, spec.color, 0.25 + 0.3 * breathe)
+      }
       put(i, BRAILLE[Math.floor(n * BRAILLE.length)], fg, bg)
     } else {
       const isTick = [0.25, 0.5, 0.75].some(t => Math.round(t * width) === i)
       if (isTick) put(i, 0x2502, C.tick, C.track)
-      else put(i, noise(i, 7) > 0.82 ? 0x2802 : 0x20, mix(C.track, 0xffffff, 0.12), C.track)
+      else put(i, noise(i - drift, 7) > 0.82 ? 0x2802 : 0x20, mix(C.track, 0xffffff, 0.12), C.track)
     }
   }
 
@@ -169,52 +178,84 @@ function cellsFor(spec: Spec, width: number, frame: number, isWorking: boolean) 
 
 // ---------- desktop: animated SVG ----------
 
-function svgFor(spec: Spec, isWorking: boolean) {
+// Last fill drawn per row, so a changed value slides to its new width instead of jumping
+const lastFill = new Map<string, number>()
+
+// SMIL `begin` that resumes a looping animation at its wall-clock phase, so a redraw never restarts it
+function phase(now: number, ms: number) {
+  return `-${((now % ms) / 1000).toFixed(2)}s`
+}
+
+function svgFor(spec: Spec, isWorking: boolean, now: number) {
   const W = 420
   const H = 22
   const col = hex(spec.color)
+  const hot = hex(mix(spec.color, 0xffffff, 0.55))
   const fw = Math.max(0, Math.round(spec.used * W))
   const bw = Math.round(spec.badge.length * 7.2 + 22)
   const bx = Math.max(0, Math.min(W - bw, fw - bw + 6))
 
-  let pixels = ''
-  for (let y = 0; y < 4; y++)
-    for (let x = 0; x < 16; x++)
-      pixels += `<rect x="${x * 3}" y="${y * 3}" width="2" height="2" fill="#fff" opacity="${(noise(x + y * 16, 3) * 0.28).toFixed(2)}"/>`
+  // Fill slides from its previous width when the value moved
+  const prev = lastFill.get(spec.key)
+  lastFill.set(spec.key, fw)
+  const slide =
+    prev !== undefined && prev !== fw
+      ? `<animate attributeName="width" from="${prev}" to="${fw}" dur="0.7s" calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>`
+      : ''
+
+  // Two pixel layers twinkling out of phase: an LED-panel shimmer
+  const pixelLayer = (seed: number) => {
+    let s = ''
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 16; x++)
+        s += `<rect x="${x * 3}" y="${y * 3}" width="2" height="2" fill="#fff" opacity="${(noise(x + y * 16, seed) * 0.3).toFixed(2)}"/>`
+    return s
+  }
 
   const ticks = [0.25, 0.5, 0.75]
     .map(t => `<rect x="${Math.round(t * W)}" y="7" width="1.5" height="8" rx="0.75" fill="${hex(C.tick)}"/>`)
     .join('')
 
-  const shimmer = isWorking
-    ? `<rect y="0" width="70" height="${H}" fill="url(#sh)" clip-path="url(#fc)"><animate attributeName="x" from="-70" to="${fw}" dur="1.6s" repeatCount="indefinite"/></rect>`
-    : ''
+  // Light sweep: always on, brighter and faster while Claude is working
+  const sweepMs = isWorking ? 1600 : 3800
+  const sweep = `<rect y="0" width="${isWorking ? 80 : 60}" height="${H}" fill="url(#sh)" opacity="${isWorking ? 1 : 0.55}" clip-path="url(#fc)"><animate attributeName="x" from="-80" to="${fw + 20}" dur="${sweepMs / 1000}s" begin="${phase(now, sweepMs)}" repeatCount="indefinite"/></rect>`
 
-  const pulse = spec.isCritical
-    ? `<animate attributeName="opacity" values="1;0.55;1" dur="1.2s" repeatCount="indefinite"/>`
-    : ''
+  // Glowing edge at the end of the fill, breathing
+  const edge =
+    fw > 6
+      ? `<rect x="${fw - 3}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values="0.25;0.9;0.25" dur="1.8s" begin="${phase(now, 1800)}" repeatCount="indefinite"/></rect>`
+      : ''
+
+  const pulseMs = spec.isCritical ? 900 : 2600
+  const badgeGlow = spec.isCritical ? '0.5;1;0.5' : '0.3;0.7;0.3'
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <defs>
-<linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="${col}" stop-opacity="0.25"/><stop offset="1" stop-color="${col}" stop-opacity="0.95"/></linearGradient>
-<linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-<pattern id="px" width="48" height="12" patternUnits="userSpaceOnUse">${pixels}</pattern>
-<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.05"/></pattern>
+<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${Math.max(1, fw)}" y2="0"><stop offset="0" stop-color="${col}" stop-opacity="0.22"/><stop offset="0.85" stop-color="${col}" stop-opacity="0.9"/><stop offset="1" stop-color="${hot}" stop-opacity="1"/></linearGradient>
+<linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<pattern id="pa" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(3)}</pattern>
+<pattern id="pb" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(11)}</pattern>
+<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="2.4s" begin="${phase(now, 2400)}" repeatCount="indefinite"/></pattern>
 <clipPath id="tc"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath>
-<clipPath id="fc"><rect width="${fw}" height="${H}"/></clipPath>
-<filter id="glow" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="4"/></filter>
+<clipPath id="fc"><rect width="${fw}" height="${H}">${slide}</rect></clipPath>
+<filter id="glow" x="-60%" y="-80%" width="220%" height="260%"><feGaussianBlur stdDeviation="3.5"/></filter>
 </defs>
 <g clip-path="url(#tc)">
 <rect width="${W}" height="${H}" fill="${hex(C.track)}"/>
 <rect width="${W}" height="${H}" fill="url(#dt)"/>
 ${ticks}
-<rect width="${fw}" height="${H}" fill="url(#g)"/>
-<rect width="${fw}" height="${H}" fill="url(#px)"/>
-${shimmer}
+<g clip-path="url(#fc)">
+<rect width="${W}" height="${H}" fill="url(#g)"/>
+<rect width="${W}" height="${H}" fill="url(#pa)"><animate attributeName="opacity" values="1;0.25;1" dur="2.6s" begin="${phase(now, 2600)}" repeatCount="indefinite"/></rect>
+<rect width="${W}" height="${H}" fill="url(#pb)"><animate attributeName="opacity" values="0.25;1;0.25" dur="2.6s" begin="${phase(now, 2600)}" repeatCount="indefinite"/></rect>
 </g>
-<g>${pulse}
-<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" opacity="0.6" filter="url(#glow)"/>
+${sweep}
+${edge}
+</g>
+<g>
+<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" filter="url(#glow)"><animate attributeName="opacity" values="${badgeGlow}" dur="${pulseMs / 1000}s" begin="${phase(now, pulseMs)}" repeatCount="indefinite"/></rect>
 <rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}"/>
+<rect x="${bx + 4}" y="3" width="${bw - 8}" height="${(H - 4) / 2 - 1}" rx="${(H - 4) / 4}" fill="#fff" opacity="0.18"/>
 <text x="${bx + bw / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="11.5" font-weight="700" fill="${hex(C.ink)}">${spec.badge.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>
 </g>
 </svg>`
@@ -417,11 +458,11 @@ let frame = 0
 let stopTimer: (() => void) | null = null
 let stopTick: (() => void) | null = null
 
-// Animates the terminal bars (shimmer while working, pulse when critical) by blitting the Rasters
+// Animates the terminal bars (sweep, twinkle, edge glow, drifting track) by blitting the Rasters
 function syncTimer($: any) {
-  const shouldRun = drawn.length > 0 && (working || drawn.some(s => s.isCritical))
+  const shouldRun = drawn.length > 0
   if (shouldRun && !stopTimer) {
-    stopTimer = $.clock.every(90, () => {
+    stopTimer = $.clock.every(120, () => {
       frame += 1
       for (const s of drawn) {
         void $.ui.blit({ requestId: bandId, key: `bar:${s.key}`, cells: cellsFor(s, barWidth, frame, working) })
@@ -611,7 +652,7 @@ export const register: Register = on => {
       isTerminal && Raster ? (
         <Raster key={`bar:${s.key}`} columns={width} rows={1} cells={cellsFor(s, width, frame, working)} />
       ) : Svg ? (
-        <Svg source={svgFor(s, working)} alt={`${s.label}: ${s.badge}`} isInteractive={working || s.isCritical} />
+        <Svg source={svgFor(s, working, now)} alt={`${s.label}: ${s.badge}`} isInteractive />
       ) : (
         <Text color={hex(s.color)}>{s.badge}</Text>
       )
