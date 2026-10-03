@@ -212,13 +212,13 @@ function svgFor(spec: Spec, isWorking: boolean) {
     .join('')
 
   // Light sweep: always on, brighter and faster while Claude is working
-  const sweepMs = isWorking ? 1600 : 3800
-  const sweep = `<rect y="0" width="${isWorking ? 80 : 60}" height="${H}" fill="url(#sh)" opacity="${isWorking ? 1 : 0.55}" clip-path="url(#fc)"><animate attributeName="x" from="-80" to="${fw + 20}" dur="${sweepMs / 1000}s" repeatCount="indefinite"/></rect>`
+  const sweepMs = isWorking ? 2400 : 5200
+  const sweep = `<rect y="0" width="${isWorking ? 80 : 60}" height="${H}" fill="url(#sh)" opacity="${isWorking ? 1 : 0.55}" clip-path="url(#fc)"><animate attributeName="x" values="-90;${fw + 30};${fw + 30}" keyTimes="0;0.62;1" calcMode="spline" keySplines="0.4 0 0.2 1;0 0 1 1" dur="${sweepMs / 1000}s" repeatCount="indefinite"/></rect>`
 
   // Glowing edge at the end of the fill, breathing
   const edge =
     fw > 6
-      ? `<rect x="${fw - 3}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values="0.25;0.9;0.25" dur="1.8s" repeatCount="indefinite"/></rect>`
+      ? `<rect x="${fw - 3}" y="1" width="5" height="${H - 2}" rx="2.5" fill="${hot}" filter="url(#glow)"><animate attributeName="opacity" values="0.25;0.9;0.25" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" dur="2.2s" repeatCount="indefinite"/></rect>`
       : ''
 
   const pulseMs = spec.isCritical ? 900 : 2600
@@ -230,7 +230,7 @@ function svgFor(spec: Spec, isWorking: boolean) {
 <linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 <pattern id="pa" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(3)}</pattern>
 <pattern id="pb" width="48" height="12" patternUnits="userSpaceOnUse">${pixelLayer(11)}</pattern>
-<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="2.4s" repeatCount="indefinite"/></pattern>
+<pattern id="dt" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity="0.06"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="6 0" dur="3s" repeatCount="indefinite"/></pattern>
 <clipPath id="tc"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath>
 <clipPath id="fc"><rect width="${fw}" height="${H}">${slide}</rect></clipPath>
 <filter id="glow" x="-60%" y="-80%" width="220%" height="260%"><feGaussianBlur stdDeviation="3.5"/></filter>
@@ -241,14 +241,14 @@ function svgFor(spec: Spec, isWorking: boolean) {
 ${ticks}
 <g clip-path="url(#fc)">
 <rect width="${W}" height="${H}" fill="url(#g)"/>
-<rect width="${W}" height="${H}" fill="url(#pa)"><animate attributeName="opacity" values="1;0.25;1" dur="2.6s" repeatCount="indefinite"/></rect>
-<rect width="${W}" height="${H}" fill="url(#pb)"><animate attributeName="opacity" values="0.25;1;0.25" dur="2.6s" repeatCount="indefinite"/></rect>
+<rect width="${W}" height="${H}" fill="url(#pa)"><animate attributeName="opacity" values="1;0.3;1" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" dur="3.2s" repeatCount="indefinite"/></rect>
+<rect width="${W}" height="${H}" fill="url(#pb)"><animate attributeName="opacity" values="0.3;1;0.3" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" dur="3.2s" repeatCount="indefinite"/></rect>
 </g>
 ${sweep}
 ${edge}
 </g>
 <g>
-<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" filter="url(#glow)"><animate attributeName="opacity" values="${badgeGlow}" dur="${pulseMs / 1000}s" repeatCount="indefinite"/></rect>
+<rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}" filter="url(#glow)"><animate attributeName="opacity" values="${badgeGlow}" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" dur="${pulseMs / 1000}s" repeatCount="indefinite"/></rect>
 <rect x="${bx}" y="2" width="${bw}" height="${H - 4}" rx="${(H - 4) / 2}" fill="${col}"/>
 <rect x="${bx + 4}" y="3" width="${bw - 8}" height="${(H - 4) / 2 - 1}" rx="${(H - 4) / 4}" fill="#fff" opacity="0.18"/>
 <text x="${bx + bw / 2}" y="${H / 2 + 4}" text-anchor="middle" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="11.5" font-weight="700" fill="${hex(C.ink)}">${spec.badge.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>
@@ -471,14 +471,15 @@ function syncTimer($: any) {
   }
 }
 
-// Redraws once a second while something counts: agent timers, the cache countdown
-function syncTick($: any, isNeeded: boolean) {
-  if (isNeeded && !stopTick) {
-    stopTick = $.clock.every(1000, () => $.ui.invalidate('ui.render'))
-  } else if (!isNeeded && stopTick) {
-    stopTick()
-    stopTick = null
-  }
+let tickMs = 0
+
+// Redraws while something counts: every second for running agents' timers, every 20 s for the
+// minute-level cache countdown. Each redraw can restart the SVG animations, so keep them rare.
+function syncTick($: any, ms: number) {
+  if (ms === tickMs) return
+  stopTick?.()
+  stopTick = ms > 0 ? $.clock.every(ms, () => $.ui.invalidate('ui.render')) : null
+  tickMs = ms
 }
 
 // ---------- hooks ----------
@@ -614,7 +615,7 @@ export const register: Register = on => {
     const cacheLeft = act.lastTurnAt > 0 ? CACHE_TTL_MS - (now - act.lastTurnAt) : 0
     const showHeader = repo !== null
 
-    syncTick($, live.length > 0 || cacheLeft > 0)
+    syncTick($, live.length > 0 ? 1000 : cacheLeft > 0 ? 20_000 : 0)
 
     if (specs.length === 0 && !showHeader) {
       drawn = []
@@ -669,7 +670,10 @@ export const register: Register = on => {
     ))
 
     const chips: string[] = []
-    if (act.lastTurnAt > 0) chips.push(cacheLeft > 0 ? `cache ≈${duration(cacheLeft)}` : 'cache cold')
+    if (act.lastTurnAt > 0) {
+      const mins = Math.ceil(cacheLeft / 60_000)
+      chips.push(cacheLeft > 0 ? `cache ≈${mins}m` : 'cache cold')
+    }
     if (act.lastTool) chips.push(`last ${act.lastTool} ${duration(act.lastToolMs)}`)
     if (crew.length > 0) chips.push(`${live.length}/${crew.length} agents`)
     if (act.skills > 0) chips.push(`${act.skills} skills`)
