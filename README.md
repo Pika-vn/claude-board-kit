@@ -12,7 +12,15 @@ Kèm thêm một **status line** (dòng trạng thái của `claude` trong termi
 
 ## Cài trên máy mới
 
-1. Chép cả thư mục này (hoặc giải nén `claude-board-kit.zip`) sang máy mới.
+1. Lấy bộ cài về máy mới, chọn một trong hai cách:
+   - **Từ GitHub** (repo riêng tư; cần GitHub CLI và `gh auth login` trước):
+     ```powershell
+     winget install --id GitHub.cli -e
+     gh auth login --web --git-protocol https
+     gh repo clone Pika-vn/claude-board-kit
+     cd claude-board-kit
+     ```
+   - **Từ file zip:** chép `claude-board-kit.zip` sang máy mới rồi giải nén.
 2. Chạy lệnh tương ứng:
 
 **Windows** (PowerShell):
@@ -33,7 +41,7 @@ Bộ cài sẽ:
 - Chép mod vào `~/.claude/mods/usage-board` và script status line vào `~/.claude/`.
 - Thêm `env.CLAUDE_CODE_PLUGIN_DIRS`, `env.CLAUDE_CODE_PLUGIN_DIR_WATCH` và `statusLine` vào `~/.claude/settings.json`. Các cài đặt khác giữ nguyên, file cũ được sao lưu thành `settings.json.bak-<thời gian>`.
 
-Chạy lại bộ cài bất cứ lúc nào để cập nhật lên bản mới.
+Chạy lại bộ cài bất cứ lúc nào để cập nhật lên bản mới. Nếu cài từ GitHub thì chạy `git pull` trước, rồi chạy lại bộ cài.
 
 ## Cấu trúc
 
