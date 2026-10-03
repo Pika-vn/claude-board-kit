@@ -1,14 +1,51 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Activity, AgentRow, Git, Limit, Task, Usage } from '../types'
+import type { Activity, AgentRow, Git, Limit, Task, ToolError, Usage } from '../types'
 
 const tasks = atom({ plugin: 'usage-board', key: 'tasks' } as const, [])
 const usage = atom({ plugin: 'usage-board', key: 'usage' } as const, null)
 const alerted = atom({ plugin: 'usage-board', key: 'alerted' } as const, [])
 const git = atom({ plugin: 'usage-board', key: 'git' } as const, null)
 const agents = atom({ plugin: 'usage-board', key: 'agents' } as const, [])
-const NO_ACTIVITY: Activity = { lastTool: '', lastToolMs: 0, errors: 0, errorTools: [], skills: 0, tokensPerSec: 0, lastTurnAt: 0 }
+const NO_ACTIVITY: Activity = {
+  lastTool: '',
+  lastToolMs: 0,
+  errors: 0,
+  errorTools: [],
+  errorDetails: [],
+  skills: 0,
+  tokensPerSec: 0,
+  lastTurnAt: 0,
+}
+
+// What a failed call was doing: the command for a shell, else the file or pattern it took
+function whatOf(e: Record<string, unknown>) {
+  const v = e.command ?? e.file_path ?? e.notebook_path ?? e.pattern ?? e.url ?? e.description ?? ''
+  return String(v).replace(/\s+/g, ' ').trim().slice(0, 120)
+}
+
+// The line of a failed result most worth reading: one naming an error, else a warning, else the first
+function messageOf(text: string | undefined) {
+  const lines = (text ?? '')
+    .replace(/<\/?[a-z_]+>/gi, '')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !/^Exit code/i.test(l))
+  const exit = /Exit code (\d+)/i.exec(text ?? '')?.[1]
+  const hit =
+    lines.find(l => /error|fatal|exception|denied|not found|not recognized|failed|cannot/i.test(l)) ??
+    lines.find(l => /warning/i.test(l))
+  const line = (hit ?? lines[0] ?? '').slice(0, 200)
+  return exit ? `exit ${exit}: ${line}` : line || 'no message'
+}
+
+function errorReport(details: ToolError[]) {
+  if (details.length === 0) return 'No tool errors this turn.'
+  return details
+    .map((d, i) => `${i + 1}. ${d.tool}${d.what ? ` — ${d.what}` : ''}\n   ${d.message}`)
+    .join('\n')
+}
 
 // A shell command exiting non-zero is often a deliberate check ("does this exist?"), so it only warns
 const SHELL_TOOLS = ['Bash', 'PowerShell']
@@ -411,6 +448,7 @@ function syncTick($: any, isNeeded: boolean) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     $.command.register({ name: 'board', description: 'Refresh the usage board (git, limits)' })
+    $.command.register({ name: 'board-errors', description: 'Show which tool calls failed this turn and why' })
     const u = await $.session.usage()
     await update($, usage, () => toUsage(u.context, u.rateLimits))
     void refreshGit($)
@@ -475,6 +513,16 @@ export const register: Register = on => {
       lastToolMs: ms,
       errors: a.errors + (failed ? 1 : 0),
       errorTools: failed ? [...(a.errorTools ?? []), e.tool] : (a.errorTools ?? []),
+      errorDetails: failed
+        ? [
+            ...(a.errorDetails ?? []),
+            {
+              tool: e.tool,
+              what: whatOf(e as Record<string, unknown>),
+              message: messageOf((result as { text?: string }).text),
+            },
+          ].slice(-10)
+        : (a.errorDetails ?? []),
       skills: a.skills + (e.tool === 'Skill' ? 1 : 0),
     }))
     if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'].includes(e.tool)) refreshGitSoon($)
@@ -495,7 +543,7 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
-    await update($, activity, a => ({ ...a, errors: 0, errorTools: [] }))
+    await update($, activity, a => ({ ...a, errors: 0, errorTools: [], errorDetails: [] }))
     return next(e)
   })
 
@@ -638,12 +686,32 @@ export const register: Register = on => {
           <Box key="chips" flexDirection="row" justifyContent="flex-end" gap={1}>
             <Text dimColor>{chips.join('  ·  ')}</Text>
             {(act.errorTools?.length ?? 0) > 0
-              ? (chip => <Text color={hex(chip.color)}>{chip.text}</Text>)(errorChip(act.errorTools))
+              ? (chip => (
+                  <Button
+                    key="errors"
+                    plain
+                    label={chip.text}
+                    onPress={async () => {
+                      const d = (await read($, activity)).errorDetails ?? []
+                      const first = d[d.length - 1]
+                      $.ui.toast(
+                        first
+                          ? `${first.tool}: ${first.message}${d.length > 1 ? `  (+${d.length - 1} more: /board-errors)` : ''}`
+                          : 'Run /board-errors for details',
+                      )
+                    }}
+                  />
+                ))(errorChip(act.errorTools))
               : null}
           </Box>
         ) : null}
       </Box>
     )
+  })
+
+  on('command.run', { name: 'board-errors' }, async ($, e, next) => {
+    const a: Activity = await read($, activity)
+    return { text: errorReport(a.errorDetails ?? []) }
   })
 
   on('command.run', { name: 'board' }, async ($, e, next) => {
