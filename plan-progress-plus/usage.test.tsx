@@ -122,7 +122,7 @@ test('every row ends in the same fixed-width column, so all bars line up at one 
         widths.add(Number(row?.children?.find(c => c?.type === 'Svg')?.props?.width))
       }
       expect(widths.size).toBe(1)
-      expect([...widths][0]).toBeGreaterThan(900)
+      expect([...widths][0]).toBeGreaterThan(800)
       // the bar's box never shrinks: a narrow band cuts the title, so every bar keeps one right edge
       for (const key of ['barbox-ticks', 'barbox:context', 'barbox:limit-five_hour', 'barbox:limit-seven_day', 'barbox:stats']) {
         const box = (await ui.find({ key })) as { props?: { width?: number; flexShrink?: number } } | undefined
@@ -302,4 +302,18 @@ test('two time chips: the chat\'s compute time and the task under way, live', as
   await $.turn.start({ text: 'again', turnId: 't2' })
   await clock.advance(5_000)
   expect(await timesOf()).toContain('◷1m 20s  ▸5s')
+})
+
+test('titles keep their room: the bar leaves the title column at least its measured width', async ($, on) => {
+  const now = mock.clock(on, { now: START }).now()
+  on('session.usage', async () => usageAt(now))
+  await $.tool.call(PLAN)
+  // a band about as wide as the desktop's Code tab
+  const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface: 'desktop', ...BAND, props: { ...BAND.props, bodyColumns: 98 } })
+  const total = 98 * 8
+  const row = (await ui.find({ key: 'barbox:context' })) as { props?: { width?: number } } | undefined
+  const bar = Number(row?.props?.width)
+  // "Context window › 515k of 1.0M left" needs about 220 px; glyph, gaps and the close column about 160
+  expect(total - bar).toBeGreaterThanOrEqual(220 + 140)
+  await ui.unmount()
 })

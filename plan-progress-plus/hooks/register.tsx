@@ -1350,7 +1350,7 @@ export const register: Register = on => {
     const isTerminal = e.surface === 'terminal'
     const TRAIL = isTerminal ? 2 : 20
     // glyph, the gaps between the row's parts and the end column: the rest of the row is title and bar
-    const RESERVED = 90 + TRAIL
+    const RESERVED = 120 + TRAIL
     const measure = (xs: string[]) => Math.min(Math.round(total * 0.3), Math.max(...xs.map(s => Math.round(textWidth(s, 6.4)))))
     // plain titles set the column; step labels and meter details only take room the track can spare
     // above NARROW, and they truncate past it. They are sized by their widest form, not the text of
