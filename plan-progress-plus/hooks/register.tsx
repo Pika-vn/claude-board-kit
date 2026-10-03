@@ -1350,7 +1350,7 @@ export const register: Register = on => {
     const isTerminal = e.surface === 'terminal'
     const TRAIL = isTerminal ? 2 : 20
     // glyph, the gaps between the row's parts and the end column: the rest of the row is title and bar
-    const RESERVED = 60 + TRAIL
+    const RESERVED = 90 + TRAIL
     const measure = (xs: string[]) => Math.min(Math.round(total * 0.3), Math.max(...xs.map(s => Math.round(textWidth(s, 6.4)))))
     // plain titles set the column; step labels and meter details only take room the track can spare
     // above NARROW, and they truncate past it. They are sized by their widest form, not the text of
@@ -1368,6 +1368,18 @@ export const register: Register = on => {
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
     // the column after each bar: the same width on every row, so all bars line up and have one length
+    // the title column takes whatever the bar leaves and truncates; the bar never shrinks, so every
+    // bar ends at the same right edge even when the band is narrower than estimated
+    const label = (key: string, children: unknown) => (
+      <Box key={key} flexGrow={1} flexShrink={1} minWidth={0} flexDirection="column">
+        {children}
+      </Box>
+    )
+    const barBox = (key: string, child: unknown) => (
+      <Box key={key} width={isTerminal ? 36 : trackW} flexShrink={0} flexDirection="row">
+        {child}
+      </Box>
+    )
     const trail = (key: string, children?: unknown) => (
       <Box key={key} width={TRAIL} flexShrink={0} flexDirection="row" justifyContent="flex-end" alignItems="center" gap={1}>
         {children ?? null}
@@ -1383,33 +1395,35 @@ export const register: Register = on => {
         ...line,
         <Box key={`meter:${m.key}`} flexDirection="row" alignItems="center" gap={1}>
           <Text color={m.color}>{'●'}</Text>
-          <Box flexDirection="column" flexShrink={1}>
-            <Text wrap="truncate">
+          {label(`label:${m.key}`, [
+            <Text key="t" wrap="truncate">
               {m.title}
               {m.detail ? <Text dimColor>{` › ${m.detail}`}</Text> : ''}
-            </Text>
-            {m.pace ? (
+            </Text>,
+            m.pace ? (
               m.pace.isWarning ? (
-                <Text wrap="truncate" color={STATE_COLOR.error}>{`${m.pace.icon} ${m.pace.text}`}</Text>
+                <Text key="pace" wrap="truncate" color={STATE_COLOR.error}>{`${m.pace.icon} ${m.pace.text}`}</Text>
               ) : (
-                <Text wrap="truncate" dimColor>{`${m.pace.icon} ${m.pace.text}`}</Text>
+                <Text key="pace" wrap="truncate" dimColor>{`${m.pace.icon} ${m.pace.text}`}</Text>
               )
-            ) : null}
-            {m.key === 'context' && m.used >= 85 ? (
-              <Box flexDirection="row">
+            ) : null,
+            m.key === 'context' && m.used >= 85 ? (
+              <Box key="compact-row" flexDirection="row">
                 <Button key="compact" label="Compact" variant="primary" onPress={() => $.session.compact()} />
               </Box>
-            ) : null}
-          </Box>
-          <Box flexGrow={1} />
-          {Svg ? (
-            <Svg source={meterSvg(m, trackW)} alt={m.alt} width={trackW} height={TRACK_H} />
-          ) : (
-            <Text>
-              <Text color={m.color}>{bar.replace(/─/g, '')}</Text>
-              <Text dimColor>{bar.replace(/━/g, '')}</Text>
-              <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
-            </Text>
+            ) : null,
+          ])}
+          {barBox(
+            `barbox:${m.key}`,
+            Svg ? (
+              <Svg source={meterSvg(m, trackW)} alt={m.alt} width={trackW} height={TRACK_H} />
+            ) : (
+              <Text>
+                <Text color={m.color}>{bar.replace(/─/g, '')}</Text>
+                <Text dimColor>{bar.replace(/━/g, '')}</Text>
+                <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
+              </Text>
+            ),
           )}
           {trail(`trail:${m.key}`)}
         </Box>,
@@ -1422,7 +1436,10 @@ export const register: Register = on => {
             ...(list.length > 0 && ms.length === 0 && Svg ? [<Svg key="div:stats" source={divider} alt="" width={total} height={1} />] : []),
             <Box key="meter:stats" flexDirection="row" alignItems="center" gap={1}>
               <Text dimColor>{'●'}</Text>
-              <Text wrap="truncate">{'This chat'}</Text>
+              {label(
+                'label:stats',
+                <Box flexDirection="row" alignItems="center" gap={1}>
+                  <Text wrap="truncate">{'This chat'}</Text>
               {act.errors.length > 0
                 ? (b => [
                     <Text key="errors-icon" color={b.isWarnOnly ? STATE_COLOR.needs_input : STATE_COLOR.error}>
@@ -1440,15 +1457,19 @@ export const register: Register = on => {
                     />,
                   ])(errorButton(act.errors))
                 : null}
-              <Box flexGrow={1} />
+                </Box>,
+              )}
               {Svg ? (
-                <Svg source={chipsSvg(cs, trackW)} alt={cs.map(c => c.alt).join(', ')} width={trackW} height={TRACK_H} />
+                barBox('barbox:stats', <Svg source={chipsSvg(cs, trackW)} alt={cs.map(c => c.alt).join(', ')} width={trackW} height={TRACK_H} />)
               ) : (
-                <Text>
-                  {cs.map((c, i) => (
-                    <Text key={`chip:${i}`} color={c.color}>{`${i > 0 ? '  ' : ''}${c.glyph}${c.text}`}</Text>
-                  ))}
-                </Text>
+                // the chips run longer than a text bar: kept whole, not cut to the bar's width
+                <Box key="barbox:stats" flexShrink={0}>
+                  <Text>
+                    {cs.map((c, i) => (
+                      <Text key={`chip:${i}`} color={c.color}>{`${i > 0 ? '  ' : ''}${c.glyph}${c.text}`}</Text>
+                    ))}
+                  </Text>
+                </Box>
               )}
               {trail('trail:stats')}
             </Box>,
@@ -1498,19 +1519,24 @@ export const register: Register = on => {
             ...line,
             <Box key={`bar-${p.id}`} flexDirection="row" alignItems={v ? 'flex-start' : 'center'} gap={1}>
               <Text color={color}>{STATE_GLYPH[p.state]}</Text>
-              <Text wrap="truncate">
-                {p.title}
-                {stepLabel(p) ? <Text dimColor>{stepLabel(p)}</Text> : ''}
-              </Text>
-              <Box flexGrow={1} />
-              {Svg ? (
-                <Svg source={source} alt={alt} width={trackW} height={TRACK_H + stripsH} />
-              ) : (
-                <Text>
-                  <Text color={color}>{bar.replace(/─/g, '')}</Text>
-                  <Text dimColor>{bar.replace(/━/g, '')}</Text>
-                  <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
-                </Text>
+              {label(
+                `label-${p.id}`,
+                <Text wrap="truncate">
+                  {p.title}
+                  {stepLabel(p) ? <Text dimColor>{stepLabel(p)}</Text> : ''}
+                </Text>,
+              )}
+              {barBox(
+                `barbox-${p.id}`,
+                Svg ? (
+                  <Svg source={source} alt={alt} width={trackW} height={TRACK_H + stripsH} />
+                ) : (
+                  <Text>
+                    <Text color={color}>{bar.replace(/─/g, '')}</Text>
+                    <Text dimColor>{bar.replace(/━/g, '')}</Text>
+                    <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
+                  </Text>
+                ),
               )}
               {trail(`trail-${p.id}`, <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />)}
             </Box>,
