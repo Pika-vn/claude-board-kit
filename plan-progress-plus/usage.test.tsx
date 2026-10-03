@@ -109,10 +109,10 @@ test('every row ends in the same fixed-width column, so all bars line up at one 
   await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface, ...BAND })
-    // cells on the terminal, CSS px on the desktop: room for a task bar's close button and nothing else
+    // cells on the terminal, columns on the desktop: room for a task bar's close button and nothing else
     for (const key of ['trail-ticks', 'trail:context', 'trail:limit-five_hour', 'trail:limit-seven_day', 'trail:stats']) {
       const box = (await ui.find({ key })) as { props?: { width?: number } } | undefined
-      expect(box?.props?.width).toBe(surface === 'terminal' ? 2 : 20)
+      expect(box?.props?.width).toBe(surface === 'terminal' ? 2 : 3)
     }
     if (surface === 'desktop') {
       // every bar is drawn at one width, and wide: the band is 160 columns, about 1280 px
@@ -300,7 +300,25 @@ test('titles keep their room: on a Code-tab-wide band the bars leave the titles 
   const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface: 'desktop', ...BAND, props: { ...BAND.props, bodyColumns: 98 } })
   const row = (await ui.find({ key: 'meter:context' })) as { children?: { type?: string; props?: { width?: number } }[] } | undefined
   const bar = Number(row?.children?.find(c => c?.type === 'Svg')?.props?.width)
-  // "Context window › 515k of 1.0M left" needs about 220 px; glyph, gaps and the close column about 140
-  expect(98 * 8 - bar).toBeGreaterThanOrEqual(220 + 140)
+  // the context title ("Context window › 124k of 200k left", 34 characters at ~7.4 px) and the glyph, gaps and close column (~88 px)
+  expect(98 * 8 - bar).toBeGreaterThanOrEqual(34 * 7.4 + 88)
   await ui.unmount()
+})
+
+test('a finished bar folds away a minute after it finishes, so the band stays short', async ($, on) => {
+  const clock = mock.clock(on, { now: START })
+  on('session.usage', async () => usageAt(START))
+  await $.tool.call(PLAN)
+  await $.tool.call({ tool: 'mcp__plan-progress-plus__plan_progress', id: 'ticks', state: 'done' })
+  const shown = async () => {
+    const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface: 'terminal', ...BAND })
+    const bar = await ui.find({ key: 'bar-ticks' })
+    await ui.unmount()
+    return bar !== undefined
+  }
+  expect(await shown()).toBe(true)
+  await clock.advance(30_000)
+  expect(await shown()).toBe(true)
+  await clock.advance(31_000)
+  expect(await shown()).toBe(false)
 })

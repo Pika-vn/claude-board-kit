@@ -24,6 +24,8 @@ export type Plan = {
   agents?: AgentRun[]
   // when the current batch of agents all finished; their strips fold a few seconds later
   agentsDoneAt?: number | null
+  // when the bar was finished; finished bars leave the band a minute later to keep it short
+  doneAt?: number | null
 }
 // the session's figures as the status line has them, drawn in the row under the bars
 export type UsageLimit = { kind: string; percentUsed: number; resetsAt: string | null }

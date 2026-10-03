@@ -895,11 +895,17 @@ function chime($: EngineInterface, prev: PlanState | undefined, next: PlanState)
   if (next === 'done') play($, 'done')
 }
 
+// how long a finished bar stays in the band before it folds away
+const DONE_SHOWN_MS = 60_000
+
 async function putPlan($: EngineInterface, next: Plan) {
   let prev: Plan | undefined
+  const now = await $.clock.now()
   await update($, plans, list => {
     prev = list.find(p => p.id === next.id)
-    return placeBar(list, next)
+    // stamp the moment a bar finishes, keep the stamp while it stays finished
+    const doneAt = next.state === 'done' ? (prev?.state === 'done' ? (prev.doneAt ?? now) : now) : null
+    return placeBar(list, { ...next, doneAt })
   })
   chime($, prev?.state, next.state)
   if (!prev) await update($, isOpen, () => true)
@@ -1179,7 +1185,8 @@ export const register: Register = on => {
       if (isCountdown) shownMinute = minute
       // the time chips count every second while a turn runs
       const isTiming = (await read($, timing)).turnStartedAt !== null && (await read($, showUsage))
-      if (agentHome.size > 0 || now < foldUntil || isCountdown || isTiming) await update($, tick, n => n + 1)
+      const isFolding = (await read($, plans)).some(p => p.state === 'done' && p.doneAt != null && now - p.doneAt < DONE_SHOWN_MS + 2000)
+      if (agentHome.size > 0 || now < foldUntil || isCountdown || isTiming || isFolding) await update($, tick, n => n + 1)
     })
     await $.command.register({ name: 'progress', description: 'Show or hide the progress bars' })
     await $.command.register({ name: 'progress-demo', description: 'Show a sample plan in the progress bars' })
@@ -1325,9 +1332,13 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const list = await read($, plans)
     const u = await read($, usage)
     const now = await $.clock.now()
+    // finished bars fold away a minute after they finish, so the band stays short enough to show whole
+    const list = (await read($, plans)).filter(p => {
+      const at = p.doneAt ?? p.agentsDoneAt ?? null
+      return p.state !== 'done' || (at != null && now - at < DONE_SHOWN_MS)
+    })
     // the meters stand on their own: they show with no task bar open too
     const isShowingUsage = await read($, showUsage)
     const act = await read($, activity)
@@ -1346,12 +1357,14 @@ export const register: Register = on => {
     const total = Math.max(320, (e.props.bodyColumns || 100) * 8)
     // every bar has the same width and is pinned to the right edge (a fixed-width end column holding only
     // a task bar's close button), so rows line up whatever their titles; the slack goes after the title.
-    // Desktop reports ~8 CSS px per column and lays Box widths out in CSS px; the terminal in cells.
+    // Desktop reports ~8 CSS px per column and lays Box widths out in columns too (a width of 20 came out
+    // about 160 px); Svg widths are CSS px. The terminal counts cells.
     const isTerminal = e.surface === 'terminal'
-    const TRAIL = isTerminal ? 2 : 20
-    // glyph, the gaps between the row's parts and the end column: the rest of the row is title and bar
-    const RESERVED = 120 + TRAIL
-    const measure = (xs: string[]) => Math.min(Math.round(total * 0.3), Math.max(...xs.map(s => Math.round(textWidth(s, 6.4)))))
+    const TRAIL = isTerminal ? 2 : 3
+    // glyph, the gaps between the row's parts and the end column, in px: the rest is title and bar
+    const RESERVED = TRAIL * 8 + 64
+    // the desktop's text runs about 7.4 px a character; measuring smaller wrapped long titles onto two lines
+    const measure = (xs: string[]) => Math.min(Math.round(total * 0.38), Math.max(...xs.map(s => Math.round(textWidth(s, 7.4)))))
     // plain titles set the column; step labels and meter details only take room the track can spare
     // above NARROW, and they truncate past it. They are sized by their widest form, not the text of
     // the moment, so a step moving on or a countdown ticking does not resize every bar.
