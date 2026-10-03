@@ -84,14 +84,14 @@ test('a meter fills with what is left, its knob says "% left", and its colour fo
     const svg = (row?.children ?? []).find(c => (c as Node)?.type === 'Svg') as Node | undefined
     return String(svg?.props?.source ?? '')
   }
-  const context = await svgOf('barbox:context')
+  const context = await svgOf('meter:context')
   const width = Number(/<clipPath id="fill"><rect width="([\d.]+)"/.exec(context)?.[1])
   const track = Number(/<svg[^>]* width="(\d+)"/.exec(context)?.[1])
   // 62% left of the track, not the 38% used
   expect(Math.round((width / track) * 100)).toBe(62)
   expect(context).toContain('62% left')
   // 92% of the week used: 8% left reads red and pulses fast
-  const week = await svgOf('barbox:limit-seven_day')
+  const week = await svgOf('meter:limit-seven_day')
   expect(week).toContain('8% left')
   expect(week).toContain('fill="#ff')
   expect(week).toContain('dur="0.9s"')
@@ -117,24 +117,12 @@ test('every row ends in the same fixed-width column, so all bars line up at one 
     if (surface === 'desktop') {
       // every bar is drawn at one width, and wide: the band is 160 columns, about 1280 px
       const widths = new Set<number>()
-      for (const key of ['barbox-ticks', 'barbox:context', 'barbox:limit-five_hour', 'barbox:limit-seven_day']) {
+      for (const key of ['bar-ticks', 'meter:context', 'meter:limit-five_hour', 'meter:limit-seven_day']) {
         const row = (await ui.find({ key })) as { children?: { type?: string; props?: { width?: number } }[] } | undefined
         widths.add(Number(row?.children?.find(c => c?.type === 'Svg')?.props?.width))
       }
       expect(widths.size).toBe(1)
       expect([...widths][0]).toBeGreaterThan(800)
-      // the bar's box never shrinks: a narrow band cuts the title, so every bar keeps one right edge
-      for (const key of ['barbox-ticks', 'barbox:context', 'barbox:limit-five_hour', 'barbox:limit-seven_day', 'barbox:stats']) {
-        const box = (await ui.find({ key })) as { props?: { width?: number; flexShrink?: number } } | undefined
-        expect(box?.props?.flexShrink).toBe(0)
-        expect(box?.props?.width).toBe([...widths][0])
-      }
-      for (const key of ['label-ticks', 'label:context', 'label:stats']) {
-        const box = (await ui.find({ key })) as { props?: { flexGrow?: number; minWidth?: number } } | undefined
-        expect(box?.props?.flexGrow).toBe(1)
-        // a floor under the title column: a desktop row is only as wide as its content, so 0 collapsed it
-        expect(box?.props?.minWidth).toBeGreaterThan(80)
-      }
     }
     // a task bar's end column holds its close button only, no %
     expect((await ui.find({ key: 'trail-ticks' }) as { text?: string } | undefined)?.text ?? '').not.toContain('%')
@@ -256,7 +244,7 @@ test('a limit window past its reset is drawn empty, not at its old fill', async 
   const hour = (await ui.find({ key: 'meter:limit-five_hour' }))?.text ?? ''
   expect(hour).toContain('5-hour limit › reset')
   // a fresh window is all left: the bar is full, not at its old 8%
-  const row = (await ui.find({ key: 'barbox:limit-five_hour' })) as { children?: { type?: string; props?: { source?: string } }[] } | undefined
+  const row = (await ui.find({ key: 'meter:limit-five_hour' })) as { children?: { type?: string; props?: { source?: string } }[] } | undefined
   const svg = String(row?.children?.find(c => c?.type === 'Svg')?.props?.source ?? '')
   expect(svg).toContain('100% left')
   expect(svg).not.toContain('8% left')
@@ -305,16 +293,14 @@ test('two time chips: the chat\'s compute time and the task under way, live', as
   expect(await timesOf()).toContain('◷1m 20s  ▸5s')
 })
 
-test('titles keep their room: the bar leaves the title column at least its measured width', async ($, on) => {
+test('titles keep their room: on a Code-tab-wide band the bars leave the titles their measured width', async ($, on) => {
   const now = mock.clock(on, { now: START }).now()
   on('session.usage', async () => usageAt(now))
   await $.tool.call(PLAN)
-  // a band about as wide as the desktop's Code tab
   const ui = await $.ui.mount({ plugin: 'plan-progress-plus', surface: 'desktop', ...BAND, props: { ...BAND.props, bodyColumns: 98 } })
-  const total = 98 * 8
-  const row = (await ui.find({ key: 'barbox:context' })) as { props?: { width?: number } } | undefined
-  const bar = Number(row?.props?.width)
-  // "Context window › 515k of 1.0M left" needs about 220 px; glyph, gaps and the close column about 160
-  expect(total - bar).toBeGreaterThanOrEqual(220 + 140)
+  const row = (await ui.find({ key: 'meter:context' })) as { children?: { type?: string; props?: { width?: number } }[] } | undefined
+  const bar = Number(row?.children?.find(c => c?.type === 'Svg')?.props?.width)
+  // "Context window › 515k of 1.0M left" needs about 220 px; glyph, gaps and the close column about 140
+  expect(98 * 8 - bar).toBeGreaterThanOrEqual(220 + 140)
   await ui.unmount()
 })

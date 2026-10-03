@@ -1368,22 +1368,6 @@ export const register: Register = on => {
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
     // the meters sit under the task bars as one group: a hairline above it, none between its rows
     // the column after each bar: the same width on every row, so all bars line up and have one length
-    // the title column is at least as wide as the titles measured above and takes any slack; the bar
-    // never shrinks. A desktop row is only as wide as its content, so without that floor a growing
-    // column had nothing to grow into and collapsed to zero, wrapping its text a letter per line.
-    const labelMin = isTerminal
-      ? Math.max(8, Math.min(Math.round(titleWidth / 6.4), (e.props.bodyColumns || 100) - 36 - TRAIL - 6))
-      : titleWidth
-    const label = (key: string, children: unknown) => (
-      <Box key={key} flexGrow={1} flexShrink={0} minWidth={labelMin} flexDirection="column">
-        {children}
-      </Box>
-    )
-    const barBox = (key: string, child: unknown) => (
-      <Box key={key} width={isTerminal ? 36 : trackW} flexShrink={0} flexDirection="row">
-        {child}
-      </Box>
-    )
     const trail = (key: string, children?: unknown) => (
       <Box key={key} width={TRAIL} flexShrink={0} flexDirection="row" justifyContent="flex-end" alignItems="center" gap={1}>
         {children ?? null}
@@ -1397,37 +1381,35 @@ export const register: Register = on => {
 
       return [
         ...line,
-        <Box key={`meter:${m.key}`} width="100%" flexDirection="row" alignItems="center" gap={1}>
+        <Box key={`meter:${m.key}`} flexDirection="row" alignItems="center" gap={1}>
           <Text color={m.color}>{'●'}</Text>
-          {label(`label:${m.key}`, [
-            <Text key="t" wrap="truncate">
+          <Box flexDirection="column" flexShrink={1}>
+            <Text wrap="truncate">
               {m.title}
               {m.detail ? <Text dimColor>{` › ${m.detail}`}</Text> : ''}
-            </Text>,
-            m.pace ? (
+            </Text>
+            {m.pace ? (
               m.pace.isWarning ? (
-                <Text key="pace" wrap="truncate" color={STATE_COLOR.error}>{`${m.pace.icon} ${m.pace.text}`}</Text>
+                <Text wrap="truncate" color={STATE_COLOR.error}>{`${m.pace.icon} ${m.pace.text}`}</Text>
               ) : (
-                <Text key="pace" wrap="truncate" dimColor>{`${m.pace.icon} ${m.pace.text}`}</Text>
+                <Text wrap="truncate" dimColor>{`${m.pace.icon} ${m.pace.text}`}</Text>
               )
-            ) : null,
-            m.key === 'context' && m.used >= 85 ? (
-              <Box key="compact-row" flexDirection="row">
+            ) : null}
+            {m.key === 'context' && m.used >= 85 ? (
+              <Box flexDirection="row">
                 <Button key="compact" label="Compact" variant="primary" onPress={() => $.session.compact()} />
               </Box>
-            ) : null,
-          ])}
-          {barBox(
-            `barbox:${m.key}`,
-            Svg ? (
-              <Svg source={meterSvg(m, trackW)} alt={m.alt} width={trackW} height={TRACK_H} />
-            ) : (
-              <Text>
-                <Text color={m.color}>{bar.replace(/─/g, '')}</Text>
-                <Text dimColor>{bar.replace(/━/g, '')}</Text>
-                <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
-              </Text>
-            ),
+            ) : null}
+          </Box>
+          <Box flexGrow={1} />
+          {Svg ? (
+            <Svg source={meterSvg(m, trackW)} alt={m.alt} width={trackW} height={TRACK_H} />
+          ) : (
+            <Text>
+              <Text color={m.color}>{bar.replace(/─/g, '')}</Text>
+              <Text dimColor>{bar.replace(/━/g, '')}</Text>
+              <Text color={m.color}>{` ${Math.max(0, 100 - m.used)}% left`}</Text>
+            </Text>
           )}
           {trail(`trail:${m.key}`)}
         </Box>,
@@ -1438,12 +1420,9 @@ export const register: Register = on => {
       cs.length > 0
         ? [
             ...(list.length > 0 && ms.length === 0 && Svg ? [<Svg key="div:stats" source={divider} alt="" width={total} height={1} />] : []),
-            <Box key="meter:stats" width="100%" flexDirection="row" alignItems="center" gap={1}>
+            <Box key="meter:stats" flexDirection="row" alignItems="center" gap={1}>
               <Text dimColor>{'●'}</Text>
-              {label(
-                'label:stats',
-                <Box flexDirection="row" alignItems="center" gap={1}>
-                  <Text wrap="truncate">{'This chat'}</Text>
+              <Text wrap="truncate">{'This chat'}</Text>
               {act.errors.length > 0
                 ? (b => [
                     <Text key="errors-icon" color={b.isWarnOnly ? STATE_COLOR.needs_input : STATE_COLOR.error}>
@@ -1461,19 +1440,15 @@ export const register: Register = on => {
                     />,
                   ])(errorButton(act.errors))
                 : null}
-                </Box>,
-              )}
+              <Box flexGrow={1} />
               {Svg ? (
-                barBox('barbox:stats', <Svg source={chipsSvg(cs, trackW)} alt={cs.map(c => c.alt).join(', ')} width={trackW} height={TRACK_H} />)
+                <Svg source={chipsSvg(cs, trackW)} alt={cs.map(c => c.alt).join(', ')} width={trackW} height={TRACK_H} />
               ) : (
-                // the chips run longer than a text bar: kept whole, not cut to the bar's width
-                <Box key="barbox:stats" flexShrink={0}>
-                  <Text>
-                    {cs.map((c, i) => (
-                      <Text key={`chip:${i}`} color={c.color}>{`${i > 0 ? '  ' : ''}${c.glyph}${c.text}`}</Text>
-                    ))}
-                  </Text>
-                </Box>
+                <Text>
+                  {cs.map((c, i) => (
+                    <Text key={`chip:${i}`} color={c.color}>{`${i > 0 ? '  ' : ''}${c.glyph}${c.text}`}</Text>
+                  ))}
+                </Text>
               )}
               {trail('trail:stats')}
             </Box>,
@@ -1483,7 +1458,7 @@ export const register: Register = on => {
     // the repository the session works in: name, branch, and the lines changed since the last commit
     const gitRow = repo
       ? [
-          <Box key="git" width="100%" flexDirection="row" alignItems="center" gap={2}>
+          <Box key="git" flexDirection="row" alignItems="center" gap={2}>
             <Text dimColor>{repo.repo}</Text>
             <Text dimColor>{repo.branch}</Text>
             <Box flexGrow={1} />
@@ -1499,7 +1474,7 @@ export const register: Register = on => {
       : []
 
     return (
-      <Box width="100%" flexDirection="column" gap={1}>
+      <Box flexDirection="column" gap={1}>
         {gitRow}
         {list.flatMap((p, i) => {
           const v = visibleAgents(p, now)
@@ -1521,26 +1496,21 @@ export const register: Register = on => {
 
           return [
             ...line,
-            <Box key={`bar-${p.id}`} width="100%" flexDirection="row" alignItems={v ? 'flex-start' : 'center'} gap={1}>
+            <Box key={`bar-${p.id}`} flexDirection="row" alignItems={v ? 'flex-start' : 'center'} gap={1}>
               <Text color={color}>{STATE_GLYPH[p.state]}</Text>
-              {label(
-                `label-${p.id}`,
-                <Text wrap="truncate">
-                  {p.title}
-                  {stepLabel(p) ? <Text dimColor>{stepLabel(p)}</Text> : ''}
-                </Text>,
-              )}
-              {barBox(
-                `barbox-${p.id}`,
-                Svg ? (
-                  <Svg source={source} alt={alt} width={trackW} height={TRACK_H + stripsH} />
-                ) : (
-                  <Text>
-                    <Text color={color}>{bar.replace(/─/g, '')}</Text>
-                    <Text dimColor>{bar.replace(/━/g, '')}</Text>
-                    <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
-                  </Text>
-                ),
+              <Text wrap="truncate">
+                {p.title}
+                {stepLabel(p) ? <Text dimColor>{stepLabel(p)}</Text> : ''}
+              </Text>
+              <Box flexGrow={1} />
+              {Svg ? (
+                <Svg source={source} alt={alt} width={trackW} height={TRACK_H + stripsH} />
+              ) : (
+                <Text>
+                  <Text color={color}>{bar.replace(/─/g, '')}</Text>
+                  <Text dimColor>{bar.replace(/━/g, '')}</Text>
+                  <Text color={color}>{` ${Math.min(w.total, p.state === 'done' ? w.total : w.pos + 1)}/${w.total}`}</Text>
+                </Text>
               )}
               {trail(`trail-${p.id}`, <Button key={`close-${p.id}`} plain dimColor label="✕" onPress={() => dropPlan($, p.id)} />)}
             </Box>,
