@@ -359,8 +359,20 @@ function specsFor(list: Task[], u: Usage | null, crew: AgentRow[], now: number):
     })
   }
 
-  // Always shown: before the first response the window reads as untouched
-  if (u) {
+  // Always shown: before the first reading the row waits rather than vanishing
+  if (!u) {
+    specs.push({
+      key: 'ctx',
+      glyph: '●',
+      label: 'Context window',
+      note: 'waiting for first reply',
+      used: 1,
+      color: C.green,
+      badge: '100% left',
+      right: '0%',
+      isCritical: false,
+    })
+  } else {
     const usedPct = u.contextPercent ?? 0
     const left = 100 - usedPct
     const leftK = Math.round((u.contextWindow * left) / 100 / 1000)
@@ -747,6 +759,14 @@ export const register: Register = on => {
               : null}
           </Box>
         ) : null}
+      </Box>
+    )
+  }).catch(async ($, e, next) => {
+    // A drawing that failed still leaves a row, so the board never silently disappears
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box paddingX={1}>
+        <Text dimColor>usage board: {String(next.error).slice(0, 160)}</Text>
       </Box>
     )
   })
