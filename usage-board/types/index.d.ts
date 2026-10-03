@@ -7,6 +7,7 @@ export type Activity = {
   lastTool: string
   lastToolMs: number
   errors: number
+  errorTools: string[] // tools that failed this turn, in order
   skills: number
   tokensPerSec: number
   lastTurnAt: number

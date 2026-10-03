@@ -8,7 +8,19 @@ const usage = atom({ plugin: 'usage-board', key: 'usage' } as const, null)
 const alerted = atom({ plugin: 'usage-board', key: 'alerted' } as const, [])
 const git = atom({ plugin: 'usage-board', key: 'git' } as const, null)
 const agents = atom({ plugin: 'usage-board', key: 'agents' } as const, [])
-const NO_ACTIVITY: Activity = { lastTool: '', lastToolMs: 0, errors: 0, skills: 0, tokensPerSec: 0, lastTurnAt: 0 }
+const NO_ACTIVITY: Activity = { lastTool: '', lastToolMs: 0, errors: 0, errorTools: [], skills: 0, tokensPerSec: 0, lastTurnAt: 0 }
+
+// A shell command exiting non-zero is often a deliberate check ("does this exist?"), so it only warns
+const SHELL_TOOLS = ['Bash', 'PowerShell']
+
+function errorChip(tools: string[]) {
+  const names = [...new Set(tools)]
+  const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2}` : '')
+  return {
+    text: `·  ⚠ ${tools.length} error${tools.length > 1 ? 's' : ''} · ${shown}`,
+    color: names.every(n => SHELL_TOOLS.includes(n)) ? C.yellow : C.red,
+  }
+}
 const activity = atom({ plugin: 'usage-board', key: 'activity' } as const, NO_ACTIVITY)
 
 // Palette
@@ -463,6 +475,7 @@ export const register: Register = on => {
       lastTool: e.tool,
       lastToolMs: ms,
       errors: a.errors + (failed ? 1 : 0),
+      errorTools: failed ? [...(a.errorTools ?? []), e.tool] : (a.errorTools ?? []),
       skills: a.skills + (e.tool === 'Skill' ? 1 : 0),
     }))
     if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'].includes(e.tool)) refreshGitSoon($)
@@ -483,7 +496,7 @@ export const register: Register = on => {
   })
 
   on('turn.start', async ($, e, next) => {
-    await update($, activity, a => ({ ...a, errors: 0 }))
+    await update($, activity, a => ({ ...a, errors: 0, errorTools: [] }))
     return next(e)
   })
 
@@ -631,7 +644,9 @@ export const register: Register = on => {
         {chips.length > 0 ? (
           <Box key="chips" flexDirection="row" justifyContent="flex-end" gap={1}>
             <Text dimColor>{chips.join('  ·  ')}</Text>
-            {act.errors > 0 ? <Text color={hex(C.red)}>{`·  ⚠ ${act.errors} error${act.errors > 1 ? 's' : ''}`}</Text> : null}
+            {(act.errorTools?.length ?? 0) > 0
+              ? (chip => <Text color={hex(chip.color)}>{chip.text}</Text>)(errorChip(act.errorTools))
+              : null}
           </Box>
         ) : null}
       </Box>
