@@ -10,7 +10,7 @@ $kit = $PSScriptRoot
 
 function Step($text) { Write-Host "==> $text" -ForegroundColor Cyan }
 
-# 1. Tools the board uses: Git (repo / branch / diff row) and GitHub CLI (Create PR button)
+# 1. Tools the board uses: Git (repo / branch / diff row) and GitHub CLI (to clone this kit from GitHub)
 if (-not $SkipTools) {
     $tools = @(
         @{ Id = 'Git.Git'; Exe = 'C:\Program Files\Git\cmd\git.exe'; Cmd = 'git' },
@@ -72,4 +72,3 @@ $json = $settings | ConvertTo-Json -Depth 32
 
 Write-Host ''
 Write-Host 'Done. Open a new Claude Code session to see the board.' -ForegroundColor Green
-Write-Host 'For the Create PR button, sign in to GitHub once:  gh auth login'

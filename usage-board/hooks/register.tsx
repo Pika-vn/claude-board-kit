@@ -359,8 +359,7 @@ async function refreshGit($: any) {
   const out = stat?.stdout ?? ''
   const add = Number(/(\d+) insertion/.exec(out)?.[1] ?? 0)
   const del = Number(/(\d+) deletion/.exec(out)?.[1] ?? 0)
-  const hasRemote = ((await runGit($, ['remote']))?.stdout.trim() ?? '') !== ''
-  await update($, git, () => ({ repo, branch, add, del, hasRemote }))
+  await update($, git, () => ({ repo, branch, add, del }))
 }
 
 function refreshGitSoon($: any) {
@@ -538,11 +537,6 @@ export const register: Register = on => {
     }
 
     working = e.props.isWorking
-    const createPr = () =>
-      $.prompt.submit({
-        text: 'Create a pull request for the current branch with gh: commit and push any pending work first, then open the PR.',
-        asUser: true,
-      })
     const compact = () => $.session.compact()
     const activeKey = specs.find(s => s.color === C.purple)?.key ?? specs.find(s => s.key.startsWith('group:'))?.key
 
@@ -610,7 +604,6 @@ export const register: Register = on => {
                   <Text color={hex(C.red)}>-{commas(repo.del)}</Text>
                 </Box>
               ) : null}
-              {repo.hasRemote ? <Button key="pr" label="Create PR" variant="primary" onPress={createPr} /> : null}
             </Box>
           </Box>
         ) : null}

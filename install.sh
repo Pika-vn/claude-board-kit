@@ -7,7 +7,7 @@ KIT="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 step() { printf '\033[36m==> %s\033[0m\n' "$1"; }
 
-# 1. Tools: git (repo row), gh (Create PR), python3 (status line + settings merge)
+# 1. Tools: git (repo row), gh (clone this kit from GitHub), python3 (status line + settings merge)
 if [[ "${1:-}" != "--skip-tools" ]]; then
   for tool in git gh python3; do
     if command -v "$tool" >/dev/null 2>&1; then
@@ -49,4 +49,3 @@ PY
 
 echo
 printf '\033[32mDone. Open a new Claude Code session to see the board.\033[0m\n'
-echo 'For the Create PR button, sign in to GitHub once:  gh auth login'

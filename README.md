@@ -2,7 +2,7 @@
 
 Bảng tiến độ luôn hiện phía trên ô nhập lệnh của Claude Code (cả tab Code của desktop app lẫn `claude` ở terminal):
 
-- Repo · nhánh · `+/−` · nút **Create PR**
+- Repo · nhánh · `+/−`
 - Nhóm việc theo phase (`✓ Done x/y`, phase đang chạy màu tím) và dòng con cho từng subagent (công cụ đang dùng, thời gian chạy)
 - Context window (nút **Compact** khi ≥ 85%), giới hạn 5 giờ và tuần, kèm tốc độ tiêu hao 🔥⚡🍃 và dự báo hết hạn mức
 - Màu theo phần còn lại: xanh → vàng → đỏ
@@ -33,8 +33,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 bash install.sh
 ```
 
-3. Đăng nhập GitHub một lần (cho nút Create PR): `gh auth login`
-4. Mở một phiên Claude Code mới.
+3. Mở một phiên Claude Code mới.
 
 Bộ cài sẽ:
 - Cài Git và GitHub CLI nếu thiếu (winget trên Windows, Homebrew trên macOS). Bỏ qua bước này bằng `-SkipTools` / `--skip-tools`.
